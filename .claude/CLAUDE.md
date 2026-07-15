@@ -2,7 +2,7 @@
 
 このプロジェクトで作業するときは、以下のルールを必ず守ってください。
 
-前提資料: `docs/current-state-audit.md`(現状棚卸し)、`docs/specs/2026-07-16-rewrite-architecture-design.md`(新アーキテクチャ設計)、`docs/plans/2026-07-16-rewrite-foundation.md`(基盤実装プラン)。実装方針(アーキテクチャ・RBAC・パッケージ構成など)で迷ったらまずこれらを参照する。
+前提資料: `docs/current-state-audit.md`(現状棚卸し)、`docs/specs/rewrite-architecture-design.md`(新アーキテクチャ設計)、`docs/plans/rewrite-foundation.md`(基盤実装プラン)。実装方針(アーキテクチャ・RBAC・パッケージ構成など)で迷ったらまずこれらを参照する。
 
 UI/UXの見た目や細かい挙動(画面構成、文言、ボタン配置、既存の業務ロジックの実際の細部など)は機能面で変更しない前提のものが多いため、これらの要約docsだけで判断せず、旧リポジトリ `C:\Users\Yuzuki\Documents\discord_bot`(Discord_Management_Bot_V2)の実コードを都度参照して実装すること。docsは差分・設計判断の要約であり、実装の正確なソースは旧リポジトリのコードそのもの。
 
