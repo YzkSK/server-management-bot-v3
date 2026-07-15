@@ -4,5 +4,7 @@ dist-test/
 .next/
 *.tsbuildinfo
 .env
-.env.local
+.env.*
+!.env.example
+!.env.*.example
 .turbo/

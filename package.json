@@ -2,10 +2,10 @@
   "name": "server-management-bot-v3",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@10.24.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "packageManager": "bun@1.3.14",
   "engines": {
-    "node": ">=24 <25",
-    "pnpm": ">=10"
+    "bun": ">=1.3.0 <2.0.0"
   },
   "scripts": {
     "build": "turbo run build",
@@ -13,12 +13,12 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "db:generate": "pnpm --filter @sm-bot/db db:generate",
-    "db:migrate": "pnpm --filter @sm-bot/db db:migrate"
+    "db:generate": "bun run --filter @sm-bot/db db:generate",
+    "db:migrate": "bun run --filter @sm-bot/db db:migrate"
   },
   "devDependencies": {
-    "@types/node": "*",
-    "turbo": "*",
-    "typescript": "*"
+    "@types/bun": "^1.3.14",
+    "turbo": "^2.10.5",
+    "typescript": "^7.0.2"
   }
 }
