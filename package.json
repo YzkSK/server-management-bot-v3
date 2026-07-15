@@ -1,0 +1,24 @@
+{
+  "name": "server-management-bot-v3",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.24.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "pnpm --filter @sm-bot/db db:generate",
+    "db:migrate": "pnpm --filter @sm-bot/db db:migrate"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "turbo": "*",
+    "typescript": "*"
+  }
+}
