@@ -2,7 +2,7 @@
 
 このプロジェクトで作業するときは、以下のルールを必ず守ってください。
 
-前提資料: `docs/current-state-audit.md`(現状棚卸し)と`docs/superpowers/specs/2026-07-16-rewrite-architecture-design.md`(新アーキテクチャ設計、いずれもDiscord_Management_Bot_V2リポジトリ)。実装方針で迷ったらまずこれらを参照する。
+前提資料: `docs/current-state-audit.md`(現状棚卸し)、`docs/specs/2026-07-16-rewrite-architecture-design.md`(新アーキテクチャ設計)、`docs/plans/2026-07-16-rewrite-foundation.md`(基盤実装プラン)。実装方針で迷ったらまずこれらを参照する。
 
 ## 禁止事項
 
