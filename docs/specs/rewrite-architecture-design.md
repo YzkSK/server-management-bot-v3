@@ -18,7 +18,9 @@
 
 ## 2. 技術スタック
 
-現行から維持: TypeScript, Node.js, discord.js v14+, Drizzle ORM, PostgreSQL, Redis, Socket.io, zod, Next.js, TailwindCSS, shadcn/ui, Docker Compose, VOICEVOX, pnpm workspace, GitHub Actions。
+現行から維持: TypeScript, discord.js v14+, Drizzle ORM, PostgreSQL, Redis, Socket.io, zod, Next.js, TailwindCSS, shadcn/ui, Docker Compose, VOICEVOX, GitHub Actions。
+
+変更点: 実行ランタイム・パッケージ管理をNode.js + pnpm workspaceからBun workspaceに変更(詳細は`docs/specs/bun-migration-design.md`を参照)。
 
 変更点: **API層をtRPCに変更**(旧仕様書は元々tRPCを想定していたが実装はRESTだった)。Dashboardの唯一のクライアントはNext.jsフロント自身であり外部公開APIの要件がないため、型共有と認証集約の両方でtRPCが有利と判断。
 
