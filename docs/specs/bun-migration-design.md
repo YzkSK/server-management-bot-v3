@@ -20,7 +20,7 @@
 | ビルドオーケストレーション | Turborepo | Turborepo(継続、bun workspaces上で動作) |
 | Node型定義 | `@types/node` | `@types/bun`(Bunランタイムの型を提供) |
 
-`packageManager` フィールドは corepack 専用の仕組み(pnpm/yarn向け)で Bun には効かないため設定しない。バージョン要件は `engines.bun` と README に明記する。
+`packageManager` フィールドは、Turborepo がパッケージマネージャー検出に使用するため設定が必須(未設定だと `turbo run` が `Could not resolve workspace` エラーで失敗することを実機検証で確認済み)。`packageManager: "bun@1.3.14"` のように**完全固定バージョン**で指定し、`engines.bun` の方はメジャーバージョン範囲(`>=1.3.0 <2.0.0`)で緩く指定する。
 
 ## `package.json` (root)
 
@@ -30,6 +30,7 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": ["apps/*", "packages/*"],
+  "packageManager": "bun@1.3.14",
   "engines": {
     "bun": ">=1.3.0 <2.0.0"
   },
