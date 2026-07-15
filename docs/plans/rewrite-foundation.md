@@ -52,10 +52,10 @@ Expected: `Initialized empty Git repository in .../server-management-bot-v3/.git
   "name": "server-management-bot-v3",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@10.24.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "packageManager": "bun@1.3.14",
   "engines": {
-    "node": ">=24 <25",
-    "pnpm": ">=10"
+    "bun": ">=1.3.0 <2.0.0"
   },
   "scripts": {
     "build": "turbo run build",
@@ -63,34 +63,26 @@ Expected: `Initialized empty Git repository in .../server-management-bot-v3/.git
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "db:generate": "pnpm --filter @sm-bot/db db:generate",
-    "db:migrate": "pnpm --filter @sm-bot/db db:migrate"
+    "db:generate": "bun run --filter @sm-bot/db db:generate",
+    "db:migrate": "bun run --filter @sm-bot/db db:migrate"
   },
   "devDependencies": {
-    "@types/node": "*",
-    "turbo": "*",
-    "typescript": "*"
+    "@types/bun": "^1.3.14",
+    "turbo": "^2.10.5",
+    "typescript": "^7.0.2"
   }
 }
 ```
 
-- [ ] **Step 3: Write `pnpm-workspace.yaml`**
-
-```yaml
-packages:
-  - "apps/*"
-  - "packages/*"
-```
-
-- [ ] **Step 4: Write `tsconfig.base.json`**
+- [ ] **Step 3: Write `tsconfig.base.json`**
 
 ```json
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "module": "Preserve",
+    "moduleResolution": "bundler",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -99,12 +91,12 @@ packages:
     "isolatedModules": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["bun-types"]
   }
 }
 ```
 
-- [ ] **Step 5: Write `turbo.json`**
+- [ ] **Step 4: Write `turbo.json`**
 
 ```json
 {
@@ -119,19 +111,20 @@ packages:
       "persistent": true
     },
     "lint": {
-      "dependsOn": ["^build"]
+      "outputs": []
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
     },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "outputs": []
     }
   }
 }
 ```
 
-- [ ] **Step 6: Write `.gitignore`**
+- [ ] **Step 5: Write `.gitignore`**
 
 ```gitignore
 node_modules/
@@ -140,11 +133,13 @@ dist-test/
 .next/
 *.tsbuildinfo
 .env
-.env.local
+.env.*
+!.env.example
+!.env.*.example
 .turbo/
 ```
 
-- [ ] **Step 7: Write `.env.example`**
+- [ ] **Step 6: Write `.env.example`**
 
 ```env
 DISCORD_BOT_TOKEN=
@@ -163,7 +158,7 @@ PUBLIC_DASHBOARD_URL=http://localhost:3000
 LOG_LEVEL=info
 ```
 
-- [ ] **Step 8: Write `docker-compose.yml`** (Postgres + Redis only — no bot/dashboard/voicevox services yet, those come with the feature-domain plans)
+- [ ] **Step 7: Write `docker-compose.yml`** (Postgres + Redis only — no bot/dashboard/voicevox services yet, those come with the feature-domain plans)
 
 ```yaml
 services:
@@ -200,7 +195,7 @@ volumes:
   redis_data:
 ```
 
-- [ ] **Step 9: Write `README.md`**
+- [ ] **Step 8: Write `README.md`**
 
 ```markdown
 # Server Management Bot v3
@@ -222,7 +217,7 @@ pnpm build
 \`\`\`
 ```
 
-- [ ] **Step 10: Verify `docker compose config` parses**
+- [ ] **Step 9: Verify `docker compose config` parses**
 
 ```bash
 docker compose config
@@ -230,7 +225,7 @@ docker compose config
 
 Expected: prints the resolved compose config with no errors.
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add -A
