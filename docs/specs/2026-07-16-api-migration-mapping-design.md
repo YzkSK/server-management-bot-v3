@@ -196,7 +196,7 @@
 **移行時の落とし穴**
 
 - 件数取得(`countTodayLogs`)は`COUNT`クエリのみでpayload等を取得しないため、旧実装よりDB負荷・レスポンスサイズは軽くなる想定。ただし当日ログ件数が多いギルドでは`COUNT`自体のコストがゼロではない点に注意(インデックス設計は実装計画で確認)。
-- Socket.ioの認証(Cookie手動decode)は`dashboard-access`パッケージの共通ヘルパーとして切り出し、tRPCの`protectedProcedure`とロジックを重複させない(設計書§4に既定のとおり)。tRPC procedureではないが実質guild-scopedな認可処理であるため、**§3.6の3原則(guildId必須検証/リソース所属検証/認可済みguildIdでの参照)は`logs:subscribe`ハンドラにも同様に適用する**(`{guildId}`をsubscribe時に受け取り、購読対象のRedis Stream `rt:logs:{guildId}`は必ずこの認可済みguildIdから導出し、クライアントが送ってきた値を直接キーに使わない)。
+- Socket.ioの認証(Cookie手動decode)は`dashboard-access`パッケージの共通ヘルパーとして切り出し、tRPCの`protectedProcedure`とロジックを重複させない(設計書§4に既定のとおり)。tRPC procedureではないが実質guild-scopedな認可処理であるため、**§3.6のうち該当する原則(1: guildId必須検証、3: 認可済みguildIdでの参照)は`logs:subscribe`ハンドラにも同様に適用する**(`{guildId}`をsubscribe時に受け取り、購読対象のRedis Stream `rt:logs:{guildId}`は必ずこの認可済みguildIdから導出し、クライアントが送ってきた値を直接キーに使わない)。原則2(ネストしたリソースIDの所属検証)は`logs:subscribe`がguildId以外のリソースIDを扱わないため現状は対象外だが、将来ネストしたリソースID(特定メッセージ購読等)を追加する場合は同様に適用する。
 - `voice`のフロント側は実は専用リアルタイムイベントを持たず、`logs:event`ストリームを間借りして`voice.*`イベント検知時にreloadする実装だった。新設計でSocket.ioチャネルを再設計するなら、この「間借り」を維持するか専用購読にするかは別セッションのVoice機能設計で扱う(本書はAPI層の範囲外として明記のみ)。
 
 ### 4.6 Discord連携(users/channels/members)
@@ -226,7 +226,7 @@
 
 すべて2026-07-16のレビューで確定した。
 
-1. **`tts.preview`**: `view_tts`必須にする(旧: 無認証)。§4.3
+1. **`tts.preview`**: `guildId`を必須inputに追加した上で`view_tts`必須にする(旧: guildId概念自体が無く無認証)。§4.3
 2. **`health`**: ダッシュボードのcapabilityモデルとは独立した共有シークレットヘッダー(`x-health-token`)で保護する。§3.5
 3. **募集の作成・close/reopen**: `view_recruitment`のまま(旧仕様継続、格上げしない)。§4.4
 4. **TTS話者IDのVOICEVOX実在性検証**: 保存時に`listSpeakers`と照合するチェックを新規に追加する(対象はspeakerIdのみ、辞書エントリは検証対象外)。§4.3
