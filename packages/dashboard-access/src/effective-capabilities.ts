@@ -1,11 +1,9 @@
-import { CAP, combineCapabilities } from "@sm-bot/shared";
+import { ALL_CAPABILITIES, combineCapabilities } from "@sm-bot/shared";
 
 export interface ResolveEffectiveCapabilitiesInput {
   grants: Array<{ capabilities: bigint }>;
   isGuildOwner: boolean;
 }
-
-const ALL_CAPABILITIES: bigint = combineCapabilities(...Object.values(CAP));
 
 export function resolveEffectiveCapabilities(
   input: ResolveEffectiveCapabilitiesInput

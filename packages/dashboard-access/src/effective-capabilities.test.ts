@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { CAP, hasCapability } from "@sm-bot/shared";
+import { ALL_CAPABILITIES, CAP, hasCapability } from "@sm-bot/shared";
 
 import { resolveEffectiveCapabilities } from "./effective-capabilities.js";
 
@@ -17,12 +17,10 @@ describe("resolveEffectiveCapabilities", () => {
     assert.equal(hasCapability(result, CAP.MANAGE_ACCESS), false);
   });
 
-  it("grants every capability bit when the principal is the guild owner, even with no grants", () => {
+  it("grants exactly every known capability bit when the principal is the guild owner, even with no grants", () => {
     const result = resolveEffectiveCapabilities({ grants: [], isGuildOwner: true });
 
-    for (const cap of Object.values(CAP)) {
-      assert.equal(hasCapability(result, cap), true);
-    }
+    assert.equal(result, ALL_CAPABILITIES);
   });
 
   it("returns 0n for a non-owner with no grants", () => {
