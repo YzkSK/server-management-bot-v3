@@ -18,7 +18,7 @@
 | モジュール解決 | `NodeNext` | `bundler`(`module: "Preserve"`) |
 | フィルタ実行 | `pnpm --filter <pkg> <script>` | `bun run --filter <pkg> <script>` |
 | ビルドオーケストレーション | Turborepo | Turborepo(継続、bun workspaces上で動作) |
-| Node型定義 | `@types/node` | `@types/bun`(Bunランタイムの型を提供) |
+| Bun型定義 | `@types/node` | `@types/bun`(Bunランタイムの型を提供) |
 
 `packageManager` フィールドは、Turborepo がパッケージマネージャー検出に使用するため設定が必須(未設定だと `turbo run` が `Could not resolve workspace` エラーで失敗することを実機検証で確認済み)。`packageManager: "bun@1.3.14"` のように**完全固定バージョン**で指定し、`engines.bun` の方はメジャーバージョン範囲(`>=1.3.0 <2.0.0`)で緩く指定する。
 
@@ -55,7 +55,7 @@
 
 - `module: "Preserve"` / `moduleResolution: "bundler"`(Bun公式推奨設定)
 - `lib: ["ES2022"]` のみ(DOM/DOM.Iterableは含めない — Dashboard等ブラウザ向けコードは各パッケージの`tsconfig.json`で個別に追加する。base に混入させると Node/Bot 側パッケージでも `window`/`document` が型として見えてしまい、実行時に存在しないAPI使用を静的検出できなくなるため)
-- `types: ["bun-types"]`
+- `types: ["bun"]`
 - strict系オプション(`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`)は元プラン通り維持
 
 ## `turbo.json`

@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Bun version: `packageManager: "bun@1.3.14"` (exact), `engines.bun: ">=1.3.0 <2.0.0"` (range) — both required; omitting `packageManager` makes `turbo run` fail with `Could not resolve workspace` (verified empirically)
-- `tsconfig.base.json`: `module: "Preserve"`, `moduleResolution: "bundler"`, `lib: ["ES2022"]` only (no DOM — that's added per-package later), `types: ["bun-types"]`, `strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`
+- `tsconfig.base.json`: `module: "Preserve"`, `moduleResolution: "bundler"`, `lib: ["ES2022"]` only (no DOM — that's added per-package later), `types: ["bun"]`, `strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`
 - `turbo.json`: `lint` and `typecheck` must NOT depend on `^build`; `test` keeps `^build` dependency plus `outputs: ["coverage/**"]`
 - `.gitignore` must not ignore `bun.lock` (it's committed)
 - Scope is limited to the root workspace config + the two design docs listed in Task 3; do not touch `packages/*` or `apps/*` (they don't exist yet — later issues create them)
@@ -88,7 +88,7 @@ Expected: `git rm` stages both deletions; `node_modules` removed from disk.
     "isolatedModules": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": ["bun-types"]
+    "types": ["bun"]
   }
 }
 ```
@@ -151,7 +151,7 @@ Expected: output ends with a line like `N packages installed`, and `bun.lock` no
 bunx tsc --showConfig -p tsconfig.base.json
 ```
 
-Expected: prints the resolved JSON config (module: "preserve", moduleResolution: "bundler", lib: ["es2022"], types: ["bun-types"]) with exit code 0, no errors.
+Expected: prints the resolved JSON config (module: "preserve", moduleResolution: "bundler", lib: ["es2022"], types: ["bun"]) with exit code 0, no errors.
 
 - [ ] **Step 8: Validate `turbo.json` is well-formed and Turborepo can run against zero packages**
 
@@ -212,7 +212,7 @@ Find the code block under `- [ ] **Step 2: Write the root \`package.json\`**` in
 
 - [ ] **Step 2: Remove the "Write `pnpm-workspace.yaml`" step**
 
-Delete the entire `- [ ] **Step 3: Write \`pnpm-workspace.yaml\`**` step (heading + its YAML code block) — the `workspaces` field in `package.json` (Step 2, already updated) replaces it. Renumber the remaining steps in Task 1 sequentially (old Step 4 "Write `tsconfig.base.json`" becomes Step 3, old Step 5 "Write `turbo.json`" becomes Step 4, and so on through the end of Task 1).
+Delete the entire **Step 3: Write `pnpm-workspace.yaml`** step (heading + its YAML code block) — the `workspaces` field in `package.json` (Step 2, already updated) replaces it. Renumber the remaining steps in Task 1 sequentially (old Step 4 "Write `tsconfig.base.json`" becomes Step 3, old Step 5 "Write `turbo.json`" becomes Step 4, and so on through the end of Task 1).
 
 - [ ] **Step 3: Replace the "Write `tsconfig.base.json`" step's code block**
 
@@ -231,7 +231,7 @@ Delete the entire `- [ ] **Step 3: Write \`pnpm-workspace.yaml\`**` step (headin
     "isolatedModules": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": ["bun-types"]
+    "types": ["bun"]
   }
 }
 ```
@@ -306,16 +306,16 @@ git commit -m "docs: update rewrite-foundation Task 1 to Bun workspace config"
 
 Current line 21:
 
-```
+```text
 現行から維持: TypeScript, Node.js, discord.js v14+, Drizzle ORM, PostgreSQL, Redis, Socket.io, zod, Next.js, TailwindCSS, shadcn/ui, Docker Compose, VOICEVOX, pnpm workspace, GitHub Actions。
 ```
 
 Replace with:
 
-```
+```text
 現行から維持: TypeScript, discord.js v14+, Drizzle ORM, PostgreSQL, Redis, Socket.io, zod, Next.js, TailwindCSS, shadcn/ui, Docker Compose, VOICEVOX, GitHub Actions。
 
-変更点: 実行ランタイム・パッケージ管理をNode.js + pnpm workspaceからBun workspaceに変更(詳細は`docs/specs/bun-migration-design.md`を参照)。
+追加の変更点(Bunワークスペース化): 実行ランタイム・パッケージ管理をNode.js + pnpm workspaceからBun workspaceに変更(詳細は`docs/specs/bun-migration-design.md`を参照)。
 ```
 
 - [ ] **Step 2: Commit**

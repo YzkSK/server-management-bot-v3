@@ -90,7 +90,7 @@ Expected: `Initialized empty Git repository in .../server-management-bot-v3/.git
     "isolatedModules": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": ["bun-types"]
+    "types": ["bun"]
   }
 }
 ```

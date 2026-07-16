@@ -12,6 +12,6 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": ["bun-types"]
+    "types": ["bun"]
   }
 }
