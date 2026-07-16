@@ -52,7 +52,7 @@
 
 `/api/discord/users`, `/api/discord/channels/[channelId]`, `/api/discord/guilds/[guildId]/members`はログ・募集・TTS・アクセス管理など複数ドメインのセレクター/ピッカーコンポーネントから横断的に使われるユーティリティで、特定ドメインの業務ロジックを持たない。設計書§3の「`dashboard-access`はDiscordロール解決のために`core`のDiscord API薄いラッパーには依存してよい」という規定に沿い、実装(DB/キャッシュ/Discord API呼び出しロジック)は`dashboard-access` routerに集約する。
 
-**権限ガードは汎用ガードを新設せず、呼び出し元ドメインのcapabilityをその都度指定する**。「対象guildへの何らかのアクセス権があれば通す」という汎用ガードは、意図しない用途への流用や権限境界の曖昧化を招くため採用しない。procedureは`resolveUsers(guildId, ids[], { requiredCapability })`のように呼び出し元が要求capabilityを渡す形にし、例えば募集画面からの利用は`view_recruitment`、アクセス管理画面からの利用は`manage_access`を要求する。実装コストは上がるが、権限境界がAPIシグネチャ上に明示される利点を優先する。
+**権限ガードは汎用ガードを新設せず、呼び出し元ドメインごとにrequiredCapabilityをサーバー側で固定する**【確定・修正】。「対象guildへの何らかのアクセス権があれば通す」という汎用ガードは、意図しない用途への流用や権限境界の曖昧化を招くため採用しない。ただし`requiredCapability`を**tRPCのprocedure入力(クライアントが送信するパラメータ)として受け取ることはしない**——クライアントがcapability値を自由に指定できてしまうと、本来`manage_access`が必要な操作を`view_recruitment`など弱いビットにすり替えて呼び出す権限昇格の余地が生まれるため。代わりに、ドメインごとに**requiredCapabilityをサーバー側コードに固定した薄いラッパーprocedure**を用意する(例: `resolveUsersForRecruitment`は内部で共通実装を`requiredCapability: view_recruitment`固定で呼び出し、`resolveUsersForAccessManagement`は`manage_access`固定で呼び出す)。DB/キャッシュ/Discord API呼び出しロジック自体の共通実装は`dashboard-access`に集約したまま、**公開procedureの単位でrequiredCapabilityをコード上固定**することで、実装の重複を避けつつ権限境界をAPIシグネチャ上に明示する(クライアント入力には一切依存しない)。
 
 ### 3.4 `view_logs_raw`ビットの使いどころ
 
@@ -61,6 +61,12 @@
 ### 3.5 `health`の認証要否【確定】
 
 旧`/api/health`はDB/Redis/VOICEVOXのレイテンシ・死活情報を完全に無認証で公開していた。この情報は特定ギルドに紐づかず「サーバー運営者」というダッシュボードのcapabilityモデルとは別軸の権限を必要とするため、**Discordログイン/capabilityとは独立した共有シークレットヘッダー方式**で保護する: `x-health-token`ヘッダー(env変数`HEALTH_CHECK_TOKEN`等で管理)と一致しないリクエストは401で拒否する。監視ツール/CIからの疎通確認はこのトークンを付与して呼び出す運用とする。ダッシュボードのRBAC(capabilities)やNextAuthセッションには一切依存しないため、`dashboard-access`にも属さず`apps/dashboard`直下の独立したミドルウェア/route(またはtRPC外の素のHTTPハンドラ)として実装する。
+
+**運用要件【確定・追加】**:
+- **HTTPS必須**: 平文HTTPでのトークン送信は許可しない(本番環境はHTTPS終端が前提だが、health専用の例外は作らない)。本番はリバースプロキシ/CDN配下でアプリ自体はHTTPしか見えない構成のため、信頼済みプロキシが付与する`x-forwarded-proto`ヘッダーで`https`を検証する(アプリ側で直接TLS終端を検証しようとしない)。ローカル開発環境ではこの検証を無効化してよい。
+- **定数時間比較**: トークン検証は文字列の`===`比較を使わず、タイミング攻撃を避けるため定数時間比較(Node.jsの`crypto.timingSafeEqual`等)を用いる。`timingSafeEqual`はBuffer長が異なると例外を投げるため、比較前に受け取ったトークンを固定長にハッシュ化(例: HMAC-SHA256)してから比較する、または長さが異なる場合は固定長のダミー値と比較したうえで最終的に不一致として扱う実装にする(長さ不一致が例外経路やログの分岐として外部から観測できないようにする)。
+- **ログ出力禁止**: リクエストログ・エラーログ・監視ツールの出力に`x-health-token`の値そのものを含めない(検証の成否のみを記録する)
+- **ローテーション・失効手順**: `HEALTH_CHECK_TOKEN`は定期ローテーション(周期は実装計画で確定)を前提とし、漏洩が疑われる場合は環境変数を即座に更新・再デプロイして失効させる。監視ツール/CI側が保持するトークンもこの更新に追従させる運用手順を実装計画に含める。
 
 ### 3.6 テナント分離(クロスギルド境界)の実装原則【確定・全ドメイン共通】
 
@@ -91,8 +97,15 @@
 
 1. **エラー原因をコードレベルで区別する**(確定): Discord APIとの通信を伴う認可判定は、結果を3種類に分ける。
    - **確実に権限がない**(`TRPCError({code:"FORBIDDEN"})` / `UNAUTHORIZED`): guild未所属、capability不足、リフレッシュトークン失効(Discord側が明示的に`invalid_grant`等を返した場合)など、再試行しても結果が変わらないケース
-   - **一時的に確認できなかった**: Discord APIのタイムアウト・5xx・ネットワークエラーなど、再試行すれば結果が変わりうるケース。`TRPCError`の`cause`に生文字列を積むのではなく、`packages/dashboard-access`で型付きの専用エラークラス(例: `DiscordUnavailableError`)を定義してcauseに渡し、adapter/フロント側がその型で判定できるようにする(文字列一致による判定は型で守れずリファクタ耐性が低いため避ける)
-   - フロント側はこの2種類を別メッセージで出し分ける(「アクセス権がありません」 vs 「一時的に確認できませんでした。しばらくしてから再試行してください」)。特にリフレッシュ失敗は、Discord側から返るエラー種別(`invalid_grant`=恒久 vs タイムアウト/5xx=一時)を`refreshDiscordAccessToken`相当の関数がステータス付きで呼び出し元に伝えるよう改修する。
+   - **一時的に確認できなかった**: Discord APIのタイムアウト・5xx・ネットワークエラーなど、再試行すれば結果が変わりうるケース。サーバー内部実装は`packages/dashboard-access`で型付きの専用エラークラス(例: `DiscordUnavailableError`)を定義し、`TRPCError`の`cause`に渡して統一する。**ただし`cause`はtRPCのシリアライズ対象外でクライアントには一切配送されないため、フロントが参照できる契約はサーバー-クライアント間で実際にシリアライズされるフィールドに限定する【確定・修正】**: tRPCの`errorFormatter`(`rewrite-architecture-design.md`§4 API層/tRPCの実装箇所に定義する。本書スコープでは契約のみ確定する)で`error.data`に`reason`という列挙型フィールドを明示的に追加し、この`error.data.reason`を「確実に権限がない」/「一時的に確認できなかった」の判定に使う**公開契約**とする。`TRPCError`のcode(`FORBIDDEN`/`UNAUTHORIZED`/`INTERNAL_SERVER_ERROR`等)はHTTPステータス相当の分類として維持しつつ、区別自体は`error.data.reason`で行う。**`reason`の値と内部例外からの変換表(確定)**:
+
+     | `error.data.reason` | 対応する内部例外/条件 | 対応する`TRPCError.code` |
+     |---|---|---|
+     | `ACCESS_DENIED` | guild未所属、capability不足、リフレッシュトークン失効(`invalid_grant`等の恒久エラー) | `FORBIDDEN` / `UNAUTHORIZED` |
+     | `DISCORD_UNAVAILABLE` | `DiscordUnavailableError`(Discord APIタイムアウト・5xx・ネットワークエラー、リトライ上限到達後) | `INTERNAL_SERVER_ERROR`(フェイルクローズのため成功コードにはしない) |
+
+     上記2種以外の内部エラー(DB接続失敗等、下記4)は`reason`フィールド自体を付与せず、フロント側は`error.data.reason`が存在しない場合は汎用エラー表示にフォールバックする(未分類=デフォルトの扱いとして明記)。
+   - フロント側は`error.data.reason`という**ドキュメント化された公開契約のみ**を判定に用いる。`error.cause`の型やエラークラスのinstanceof判定には一切依存しない(causeやエラークラス実体はサーバー内部実装でありネットワーク越しには存在しないため、フロントで判定に使おうとしても機能しない)。この2種類は別メッセージで出し分ける(「アクセス権がありません」 vs 「一時的に確認できませんでした。しばらくしてから再試行してください」)。特にリフレッシュ失敗は、Discord側から返るエラー種別(`invalid_grant`=恒久 vs タイムアウト/5xx=一時)を`refreshDiscordAccessToken`相当の関数がステータス付きで呼び出し元に伝えるよう改修する。
 2. **guild所属確認・ロールID取得を含む認可経路のDiscord API呼び出しは、全て例外を捕捉しフェイルクローズする**(確定): 旧実装の非対称性(`fetchCurrentUserGuildById`はcatchするが`fetchAuthorizedMemberRoleIds`はしない)を解消し、認可経路の全Discord API呼び出しを一貫してtry/catchし、失敗時は「一時的に確認できなかった」エラーとして返す(アクセスは許可しない=フェイルクローズだが、上記1の区別により「確実に権限がない」とは異なる旨をフロントに伝える)。
 3. **認可経路にもDiscord APIリトライを導入する**(確定): 旧`discord/users`系エンドポイントは429時に`Retry-After`尊重の最大3回リトライを持つが、全リクエストの入り口である認可判定(guild所属確認・ロールID取得)にはリトライが無いという逆転が旧実装に存在した。新実装では認可経路にも同水準のリトライを導入し、末端の周辺機能より認可という中核パスの方が堅牢である状態にする。
 4. **DB接続/クエリ失敗は握りつぶさない**: CLAUDE.mdの「エラーは必ず握り潰しを行わないようにすること」の原則どおり、DB呼び出しの失敗はcatchで隠さずそのまま`TRPCError({code:"INTERNAL_SERVER_ERROR"})`として伝播させる。これは自然にフェイルクローズ(エラー=アクセス不許可)と両立する。
@@ -125,7 +138,7 @@
 **追加で発見した非効率(修正対象)**
 
 - **`health`の3プローブが逐次実行**: 旧`createHealthReport`(`health.ts`)はDB/Redis/VOICEVOXの3チェックを`for...of`+`await`で順番に実行しており、合計レイテンシが「各チェックの合計」になる(例: 各チェックが最悪3秒かかる場合、逐次だと最大9秒、並列なら最大3秒)。各プローブ(`measureHealthProbe`)は例外を投げず結果オブジェクトを返す設計のため、単純に`Promise.all`に置き換えれば安全に並列化できる。新実装(§3.5の共有シークレットヘッダー方式ハンドラ)では3プローブを`Promise.all`で並列実行する。
-- **チャンネル名の一括解決APIが存在しない**: DB層の`listDiscordChannelNamesByIds`は既に`channelIds: string[]`を受け取るバッチ関数だが、旧HTTPルートは単一チャンネル専用(`/api/discord/channels/[channelId]`)しか公開しておらず、複数チャンネル名が必要な画面(募集一覧の`voiceChannelId`表示、Temp VC一覧等)ではチャンネル数だけ個別リクエストが発生する構造だった。新tRPCでは`resolveUsers`と同じ形で**`resolveChannels(guildId, channelIds[], { requiredCapability })`という複数id版を用意し、DB層の既存バッチ能力をそのままAPIとして公開する**(単一チャンネルの解決もこのバッチ版にid配列1件で呼べば足りるため、単一版は別途用意しない)。Discord APIから新規取得した複数チャンネルをDBキャッシュに書き込む際も、個別upsertではなく一括upsertにまとめる。
+- **チャンネル名の一括解決APIが存在しない**: DB層の`listDiscordChannelNamesByIds`は既に`channelIds: string[]`を受け取るバッチ関数だが、旧HTTPルートは単一チャンネル専用(`/api/discord/channels/[channelId]`)しか公開しておらず、複数チャンネル名が必要な画面(募集一覧の`voiceChannelId`表示、Temp VC一覧等)ではチャンネル数だけ個別リクエストが発生する構造だった。新tRPCでは`resolveUsers`と同じ形で**内部実装`resolveChannelsInternal(guildId, channelIds[], requiredCapability)`を複数id版で用意し、DB層の既存バッチ能力をそのままAPIとして公開する**(単一チャンネルの解決もこのバッチ版にid配列1件で呼べば足りるため、単一版は別途用意しない)。requiredCapabilityはクライアント入力にせず、§3.3のとおりドメイン別ラッパーprocedure(`resolveChannelsForRecruitment`等)側でコード固定する。Discord APIから新規取得した複数チャンネルをDBキャッシュに書き込む際も、個別upsertではなく一括upsertにまとめる。
 
 ## 4. ドメイン別詳細
 
@@ -216,7 +229,12 @@
 
 **移行時の落とし穴**
 
-- Discordメッセージ投稿・更新の失敗を握りつぶしAPIレスポンスは成功扱いにする非同期副作用パターンは、tRPCの`mutation`でも同様に「DB操作の成功可否とDiscord同期の成功可否を分離する」設計を踏襲する必要がある(全体をtry/catchで失敗にすると、DBは更新済みなのにエラー表示される不整合が起きる)。
+- 「DB操作の成功可否とDiscord同期の成功可否を分離する」という設計方針自体(全体をtry/catchで失敗にすると、DBは更新済みなのにエラー表示される不整合が起きる)は踏襲するが、**旧実装のように単純なfire-and-forgetで失敗を握りつぶすだけの実装は新設計では採用しない【確定・修正】**。close/reopen時のDiscordメッセージ同期は以下の設計に置き換える:
+  - close/reopenのDB状態更新と、outboxレコードのinsertは**同一DBトランザクションでコミットする**(状態更新のみコミットされoutbox insertが失われるとイベント自体が永久に消失するため)。即時のDiscord API呼び出しはコミット後にbest-effortで行い、失敗時のみ`pending`のままoutbox workerの再試行に委ねる
+  - 同期処理には**冪等性キー**(`recruitmentId` + 単調増加する状態バージョン/revision、または操作単位のUUID)を持たせる。close→reopen→closeのように同じ最終状態へ複数回遷移するケースを区別できるよう、`recruitmentId + 状態文字列`のみのキーは使わない(異なる操作が同一イベントとして潰れるのを防ぐ)
+  - 同期の状態(`pending`/`succeeded`/`failed`)を追跡できるステータスを持たせ、`failed`のまま放置されたレコードを監視できるようにする(具体的なアラート化は実装計画で検討)
+  - `failed`状態のレコードを手動再実行、または定期ジョブによる自動再試行で再同期できる手段を用意する
+  - DB更新成功とAPIレスポンス成功の分離は維持する(Discord同期の成否はミューテーション自体の成功可否に影響させない)
 - `voiceChannelId`正式対応自体はDB層の既存パターン(旧`recruitments`テーブルに倣う)を新スキーマにそのまま含めればよく、追加のマイグレーション設計は不要と見込まれる。API/フロントの実装(セレクター追加・procedure入力への追加)が主な作業になる。
 - 締切定数(`RECRUITMENT_DEADLINE_DEFAULT_DAYS`等)は`packages/shared`に移設が必要(フロント・バック双方参照)。
 
@@ -258,8 +276,8 @@
 
 **新tRPC対応案**(§3.3の方針)
 
-- `dashboard-access.router.resolveUsers(guildId, ids[], { requiredCapability })` — **guildId必須化**(旧では省略可能だった穴を塞ぐ)。汎用ガードは新設せず、呼び出し元ドメインが要求capabilityを指定する(§3.3で確定)。
-- `dashboard-access.router.resolveChannels(guildId, channelIds[], { requiredCapability })` / `searchGuildMembers(guildId, query, { requiredCapability })` — 同様に呼び出し元が要求capabilityを指定。旧ロジックのguildId検証パターン自体は踏襲するが、`resolveChannels`は§3.6で発見した「DBキャッシュがguildIdを見ていない」不備を修正した実装にする(複合条件検索+`guild_id`突合)。旧実装は単一チャンネル専用(`[channelId]`)だったが、§3.8で発見したとおりDB層は既にバッチ対応済みのため、新tRPCでは`resolveUsers`と同じく複数id版として公開する(単一チャンネルの解決もid配列1件で呼ぶ)。
+- `dashboard-access`共通実装`resolveUsersInternal(guildId, ids[], requiredCapability)` — **guildId必須化**(旧では省略可能だった穴を塞ぐ)。汎用ガードは新設せず、requiredCapabilityはクライアント入力ではなくドメインごとの公開procedure側でコード固定する(§3.3で確定・修正)。呼び出し元ドメインは`resolveUsersForRecruitment(guildId, ids[])`のような薄いラッパーprocedureを経由する。
+- 同様に`resolveChannelsInternal` / `searchGuildMembersInternal`をドメイン別ラッパーprocedure経由で公開する。旧ロジックのguildId検証パターン自体は踏襲するが、`resolveChannels`は§3.6で発見した「DBキャッシュがguildIdを見ていない」不備を修正した実装にする(複合条件検索+`guild_id`突合)。旧実装は単一チャンネル専用(`[channelId]`)だったが、§3.8で発見したとおりDB層は既にバッチ対応済みのため、新tRPCでは`resolveUsers`と同じく複数id版として公開する(単一チャンネルの解決もid配列1件で呼ぶ)。
 
 **意図的に落とす/変える機能**
 
