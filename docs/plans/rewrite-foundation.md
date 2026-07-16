@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Node.js `>=24 <25`, pnpm `>=10` (copied from current repo's `package.json` engines field)
-- All packages are ESM (`"type": "module"`), `tsconfig.base.json` targets `ES2022`/`NodeNext` with `strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`
+- All packages are ESM (`"type": "module"`), `tsconfig.base.json` targets `ES2022` with `module: "Preserve"` / `moduleResolution: "bundler"`, `strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`
 - Package scope: `@sm-bot/*` (e.g. `@sm-bot/db`)
 - Discord IDs are always `text`, timestamps are always `timestamptz`, no Postgres `enum` types — use `text` + `CHECK` constraints (carried over from `docs/current-state-audit.md` §6 database rules, which held up in the audit)
 - Capability bit table (§6.1 of the design spec) is append-only once defined — never reuse or reorder existing bit positions
@@ -24,7 +24,6 @@
 
 **Files:**
 - Create: `C:\Users\Yuzuki\Documents\GitHub\server-management-bot-v3\package.json`
-- Create: `C:\Users\Yuzuki\Documents\GitHub\server-management-bot-v3\pnpm-workspace.yaml`
 - Create: `C:\Users\Yuzuki\Documents\GitHub\server-management-bot-v3\tsconfig.base.json`
 - Create: `C:\Users\Yuzuki\Documents\GitHub\server-management-bot-v3\turbo.json`
 - Create: `C:\Users\Yuzuki\Documents\GitHub\server-management-bot-v3\.gitignore`
@@ -208,12 +207,12 @@ rewrite is based on.
 ## Setup
 
 \`\`\`bash
-pnpm install
+bun install
 cp .env.example .env
 docker compose up -d postgres redis
-pnpm db:generate
-pnpm db:migrate
-pnpm build
+bun run db:generate
+bun run db:migrate
+bun run build
 \`\`\`
 ```
 
@@ -229,7 +228,7 @@ Expected: prints the resolved compose config with no errors.
 
 ```bash
 git add -A
-git commit -m "chore: bootstrap pnpm workspace skeleton"
+git commit -m "chore: bootstrap Bun workspace skeleton"
 ```
 
 ---
