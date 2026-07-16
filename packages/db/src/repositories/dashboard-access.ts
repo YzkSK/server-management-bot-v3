@@ -1,3 +1,5 @@
+import { and, eq, inArray, or } from "drizzle-orm";
+
 import { BASELINE_EVERYONE_CAPABILITIES } from "@sm-bot/shared";
 
 import type { DbClient } from "../client.js";
@@ -30,4 +32,36 @@ export async function ensureEveryoneBaselineGrant(
     .returning({ id: dashboardAccessGrants.id });
 
   return { created: inserted.length > 0 };
+}
+
+export interface ListGrantsForPrincipalInput {
+  guildId: string;
+  userId: string;
+  roleIds: string[];
+}
+
+export type DashboardAccessGrantRow = typeof dashboardAccessGrants.$inferSelect;
+
+export async function listGrantsForPrincipal(
+  db: DbClient,
+  input: ListGrantsForPrincipalInput
+): Promise<DashboardAccessGrantRow[]> {
+  return db
+    .select()
+    .from(dashboardAccessGrants)
+    .where(
+      and(
+        eq(dashboardAccessGrants.guildId, input.guildId),
+        or(
+          and(
+            eq(dashboardAccessGrants.targetType, "user"),
+            eq(dashboardAccessGrants.targetId, input.userId)
+          ),
+          and(
+            eq(dashboardAccessGrants.targetType, "role"),
+            inArray(dashboardAccessGrants.targetId, input.roleIds)
+          )
+        )
+      )
+    );
 }
