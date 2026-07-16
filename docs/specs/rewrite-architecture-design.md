@@ -26,7 +26,7 @@
 
 ## 3. モノレポ構成(機能ドメイン別パッケージ)
 
-```
+```text
 apps/
   bot/        - Discordクライアント起動、コマンド登録、interaction受付のみ
   dashboard/  - Next.js、tRPCサーバー、Socket.io、OAuth
