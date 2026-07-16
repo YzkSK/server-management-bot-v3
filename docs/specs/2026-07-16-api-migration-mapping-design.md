@@ -137,7 +137,7 @@
 - `tts.router.getGuildSettings` / `updateGuildDefaultSpeaker` / `updateGuildDictionaryEntry` / `deleteGuildDictionaryEntry` — 読み取り`view_tts`、書き込み`manage_tts`
 - `tts.router.getMySpeaker` / `updateMySpeaker` / `deleteMySpeaker` / `getMyDictionary` / `updateMyDictionaryEntry` / `deleteMyDictionaryEntry` — **自分自身の設定のみ**を扱うため`view_tts`で十分(旧仕様どおり、adminでなくてもよい。procedure内で対象を常に`ctx.userId`に固定するため権限昇格の余地がない)
 - `tts.router.listSpeakers` — VOICEVOX話者一覧、`view_tts`
-- `tts.router.preview` — 【確定】`view_tts`必須にする(旧: 無認証)。オープンプロキシ状態を解消する
+- `tts.router.preview` — 【確定】`guildId`を必須inputに追加した上で`view_tts`必須にする(旧: guildId概念自体が無く無認証)。`view_tts`はguildごとのビットのため、§3.6原則1に従い対象guildIdが無いと権限判定ができない。オープンプロキシ状態を解消する
 
 **意図的に落とす/変える機能**
 
@@ -196,7 +196,7 @@
 **移行時の落とし穴**
 
 - 件数取得(`countTodayLogs`)は`COUNT`クエリのみでpayload等を取得しないため、旧実装よりDB負荷・レスポンスサイズは軽くなる想定。ただし当日ログ件数が多いギルドでは`COUNT`自体のコストがゼロではない点に注意(インデックス設計は実装計画で確認)。
-- Socket.ioの認証(Cookie手動decode)は`dashboard-access`パッケージの共通ヘルパーとして切り出し、tRPCの`protectedProcedure`とロジックを重複させない(設計書§4に既定のとおり)。
+- Socket.ioの認証(Cookie手動decode)は`dashboard-access`パッケージの共通ヘルパーとして切り出し、tRPCの`protectedProcedure`とロジックを重複させない(設計書§4に既定のとおり)。tRPC procedureではないが実質guild-scopedな認可処理であるため、**§3.6の3原則(guildId必須検証/リソース所属検証/認可済みguildIdでの参照)は`logs:subscribe`ハンドラにも同様に適用する**(`{guildId}`をsubscribe時に受け取り、購読対象のRedis Stream `rt:logs:{guildId}`は必ずこの認可済みguildIdから導出し、クライアントが送ってきた値を直接キーに使わない)。
 - `voice`のフロント側は実は専用リアルタイムイベントを持たず、`logs:event`ストリームを間借りして`voice.*`イベント検知時にreloadする実装だった。新設計でSocket.ioチャネルを再設計するなら、この「間借り」を維持するか専用購読にするかは別セッションのVoice機能設計で扱う(本書はAPI層の範囲外として明記のみ)。
 
 ### 4.6 Discord連携(users/channels/members)
@@ -220,7 +220,7 @@
 
 - `users`系のキャッシュ・スロットリング(5分TTL、100ms間隔シリアル化、429時最大3回リトライ)は、Discord APIレート制限対策として実装上有用な仕組みなので、guildId必須化後も**そのままdashboard-access側に移植する**(捨てない)。
 - `channels`のDBキャッシュには無効化ロジックが無く、Discord側で改名されても追従しない。新実装でTTL付きにするか、Botのchannel updateイベントで無効化するかは別セッション(logging/core実装)で扱う課題として記録するに留める。
-- `members`検索にはリトライ・キャッシュが無く、検索デバウンス(フロント300ms)頼みだった。新実装で強化するかは§5で確認。
+- 【確定】`members`検索(`searchGuildMembers`)は旧実装同様リトライ・キャッシュが無いまま素のBotトークン呼び出しにすると、あるguildでの検索連打がBot全体のDiscord APIレート制限を消費し他guildの動作にも影響しうる(可用性面でのテナント分離の穴)。今回の移行スコープで対応する: `users`系と同様の短命TTLキャッシュ(検索クエリ+guildId単位)とリトライ(429時`Retry-After`尊重)を`searchGuildMembers`にも実装する。フロント側の300msデバウンスは維持しつつ、サーバー側の防御を追加する形。
 
 ## 5. 設計判断の確定内容
 
@@ -234,6 +234,7 @@
 6. **`overview`の当日ログ上限**: `countTodayLogs`(件数集計)と`listLogs`(ページング一覧)に分離し、1000件固定上限は廃止する。§4.5
 7. **募集の`voiceChannelId`**: 今回あわせて正式対応する(DBスキーマ追加を伴う想定)。§4.4
 8. **manage_access委任制約(§6.4)**: 設計書どおり適用する(旧owner専用 → manage_access保有者も自分の保有ビットのサブセットを委任可能。ただし呼び出し元がそもそも`manage_access`を保有 or ownerであることが前提の二段階チェック、§4.1)。
+9. **`searchGuildMembers`のレート制限対策**: 今回あわせて対応する。`users`系と同様の短命TTLキャッシュ+429リトライを追加する。§4.6
 
 ### 5.1 今回未使用のcapabilityビット
 
