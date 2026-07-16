@@ -20,6 +20,6 @@
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
-    "typescript": "*"
+    "typescript": "^7.0.2"
   }
 }
