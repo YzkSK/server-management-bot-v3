@@ -3,13 +3,25 @@ import { describe, it } from "node:test";
 
 import { BASELINE_EVERYONE_CAPABILITIES } from "@sm-bot/shared";
 
-import { ensureEveryoneBaselineGrant } from "./dashboard-access.js";
+import {
+  ensureEveryoneBaselineGrant,
+  listGrantsForPrincipal
+} from "./dashboard-access.js";
 
 function createFakeDb(initialRows: Array<Record<string, unknown>> = []) {
   const rows = [...initialRows];
 
   const fakeDb = {
     rows,
+    select() {
+      return {
+        from() {
+          return {
+            where: async () => rows.filter(() => true)
+          };
+        }
+      };
+    },
     insert() {
       return {
         values(values: Record<string, unknown>) {
@@ -70,5 +82,41 @@ describe("ensureEveryoneBaselineGrant", () => {
     assert.equal(result.created, false);
     assert.equal(db.rows.length, 1);
     assert.equal(db.rows[0]?.capabilities, 0n);
+  });
+});
+
+describe("listGrantsForPrincipal", () => {
+  it("returns rows matching the user id or any of the role ids", async () => {
+    const db = createFakeDb([
+      {
+        id: "row-0",
+        guildId: "guild-1",
+        targetType: "user",
+        targetId: "user-1",
+        capabilities: 1n
+      },
+      {
+        id: "row-1",
+        guildId: "guild-1",
+        targetType: "role",
+        targetId: "role-everyone",
+        capabilities: 2n
+      },
+      {
+        id: "row-2",
+        guildId: "guild-1",
+        targetType: "role",
+        targetId: "role-mod",
+        capabilities: 4n
+      }
+    ]);
+
+    const rows = await listGrantsForPrincipal(db, {
+      guildId: "guild-1",
+      userId: "user-1",
+      roleIds: ["role-everyone"]
+    });
+
+    assert.equal(rows.length, 3);
   });
 });
