@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  ALL_CAPABILITIES,
   BASELINE_EVERYONE_CAPABILITIES,
   CAP,
   canGrantCapabilities,
@@ -90,5 +91,39 @@ describe("capability wire (de)serialization", () => {
     const wire = capabilitiesToWireString(value);
     assert.equal(typeof wire, "string");
     assert.equal(parseCapabilitiesWireString(wire), value);
+  });
+
+  it("rejects a negative wire string", () => {
+    assert.throws(() => parseCapabilitiesWireString("-1"), RangeError);
+  });
+
+  it("rejects a non-decimal wire string", () => {
+    assert.throws(() => parseCapabilitiesWireString("0x10"), RangeError);
+    assert.throws(() => parseCapabilitiesWireString("1.5"), RangeError);
+    assert.throws(() => parseCapabilitiesWireString(""), RangeError);
+  });
+
+  it("rejects a wire string with bits beyond the known capability table", () => {
+    assert.throws(() => parseCapabilitiesWireString((1n << 99n).toString(10)), RangeError);
+  });
+});
+
+describe("canGrantCapabilities with out-of-range inputs", () => {
+  it("rejects when the granter holds unknown bits", () => {
+    const ok = canGrantCapabilities({
+      granterCapabilities: -1n,
+      granterIsOwner: false,
+      requestedCapabilities: CAP.VIEW_LOGS
+    });
+    assert.equal(ok, false);
+  });
+
+  it("rejects when the requested capabilities include unknown bits", () => {
+    const ok = canGrantCapabilities({
+      granterCapabilities: ALL_CAPABILITIES,
+      granterIsOwner: false,
+      requestedCapabilities: 1n << 99n
+    });
+    assert.equal(ok, false);
   });
 });

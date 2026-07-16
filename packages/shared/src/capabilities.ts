@@ -14,6 +14,11 @@ export const CAP = {
 
 export type CapabilityBit = (typeof CAP)[keyof typeof CAP];
 
+export const ALL_CAPABILITIES: bigint = Object.values(CAP).reduce(
+  (acc, bit) => acc | bit,
+  0n
+);
+
 export const BASELINE_EVERYONE_CAPABILITIES: bigint =
   CAP.VIEW_LOGS | CAP.VIEW_VOICE | CAP.VIEW_RECRUITMENT | CAP.VIEW_TTS;
 
@@ -31,7 +36,18 @@ export interface CanGrantCapabilitiesInput {
   requestedCapabilities: bigint;
 }
 
+function isKnownCapabilities(value: bigint): boolean {
+  return value >= 0n && (value & ~ALL_CAPABILITIES) === 0n;
+}
+
 export function canGrantCapabilities(input: CanGrantCapabilitiesInput): boolean {
+  if (
+    !isKnownCapabilities(input.granterCapabilities) ||
+    !isKnownCapabilities(input.requestedCapabilities)
+  ) {
+    return false;
+  }
+
   if (input.granterIsOwner) return true;
 
   const isSubsetOfGranter =
@@ -48,6 +64,17 @@ export function capabilitiesToWireString(value: bigint): string {
   return value.toString(10);
 }
 
+const WIRE_STRING_PATTERN = /^(?:0|[1-9]\d*)$/;
+
 export function parseCapabilitiesWireString(value: string): bigint {
-  return BigInt(value);
+  if (!WIRE_STRING_PATTERN.test(value)) {
+    throw new RangeError(`Invalid capabilities wire string: ${value}`);
+  }
+
+  const parsed = BigInt(value);
+  if (!isKnownCapabilities(parsed)) {
+    throw new RangeError(`Capabilities wire string contains unknown bits: ${value}`);
+  }
+
+  return parsed;
 }
