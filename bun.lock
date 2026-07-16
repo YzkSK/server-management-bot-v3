@@ -27,6 +27,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@sm-bot/shared": "workspace:*",
+        "@trpc/server": "^11.0.0",
       },
       "devDependencies": {
         "typescript": "^7.0.2",
@@ -128,6 +129,8 @@
     "@sm-bot/db": ["@sm-bot/db@workspace:packages/db"],
 
     "@sm-bot/shared": ["@sm-bot/shared@workspace:packages/shared"],
+
+    "@trpc/server": ["@trpc/server@11.18.0", "", { "peerDependencies": { "typescript": ">=5.7.2" }, "bin": { "intent": "bin/intent.js" } }, "sha512-JAvXOuNTxgXjIDfQaOvDq1j66LMNfDJUH1IU7Slfn8EvRv2EkH6ehu3A7zpYhjO0syHHiYg77v2lG2JFJgvw7Q=="],
 
     "@turbo/darwin-64": ["@turbo/darwin-64@2.10.5", "", { "os": "darwin", "cpu": "x64" }, "sha512-ENvPwy3x5yS7MwNYHeWjqOBXkwIMp39Pd+/zXC6PoiNzF8EIvvLZOZZ+ny6L9x4WgS5vxUii2LM5gM+zjPdnWw=="],
 
