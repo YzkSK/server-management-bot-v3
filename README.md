@@ -1,9 +1,9 @@
 # Server Management Bot v3
 
-Rewrite of the Discord operations platform. See `docs/current-state-audit.md`
-and `docs/specs/2026-07-16-rewrite-architecture-design.md` in the
-original `discord_bot` repository for the audit and architecture design this
-rewrite is based on.
+Rewrite of the Discord operations platform. See
+[`docs/current-state-audit.md`](docs/current-state-audit.md) and
+[`docs/specs/rewrite-architecture-design.md`](docs/specs/rewrite-architecture-design.md)
+for the audit and architecture design this rewrite is based on.
 
 ## Setup
 
