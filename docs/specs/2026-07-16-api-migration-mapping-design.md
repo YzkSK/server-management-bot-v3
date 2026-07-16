@@ -70,13 +70,13 @@
 2. **ネストしたリソースIDの所属検証**: `recruitmentId`のようにDBの主キーでリソースを取得するprocedureは、取得後に**そのリソース自身が持つ`guildId`と、入力(または認可済み)の`guildId`が一致するか**を必ず突合する。旧`recruitments/[id]/route.ts`が`recruitment.guildId !== authorization.guild.id`で行っていたパターンを、同種の「IDでリソースを取得する全procedure」に横展開する。**不一致時は原則`404`(NOT_FOUND)に統一する**(`403`だと「そのリソース自体は存在するが権限がない」ことを暴露してしまい、他guildにそのIDのリソースが存在するかどうかの推測に使われうる。監査要件上どうしても`403`で区別したい箇所があれば、その場所だけ例外として実装計画に理由を明記する)。
 3. **DB書き込みは認可済みguildIdを使う**: 認可(原則1)を通過した後のDB操作は、クライアントが送ってきた`guildId`をそのまま使わず、**認可時にサーバー側で確定した`guildId`**を使う。旧`dashboard-access`のDELETE実装(`deleteDashboardAccessGrant(db, {guildId: authorization.guild.id, ...})`)がこのパターンで、他ドメインにも徹底する。
 
-**旧実装で実際に発見した違反(修正必須)**: `GET /api/discord/channels/[channelId]`が使うDBキャッシュ関数`listDiscordChannelNamesByIds`(`packages/db/src/repositories/discord-channels.ts`)は`channelId`のみで検索し`guildId`を一切見ていない。このため、guild Aへの閲覧権限を持つユーザーが`?guildId=A`を付けたまま無関係なguild Bのchannel IDを問い合わせると、(a) DBキャッシュに既存の行があればguild Bのチャンネル名がそのまま漏洩し、(b) キャッシュミス時はBotトークンでDiscord APIから取得した上で`upsertDiscordChannel({channelId, guildId: A, ...})`が実行され、**そのチャンネルのDB上の所属guildIdが誤ってAに書き換わる**(データ破損を伴う二次被害)。新tRPCの`resolveChannel`では以下の両方を必須とする:
+**旧実装で実際に発見した違反(修正必須)**: `GET /api/discord/channels/[channelId]`が使うDBキャッシュ関数`listDiscordChannelNamesByIds`(`packages/db/src/repositories/discord-channels.ts`)は`channelId`のみで検索し`guildId`を一切見ていない。このため、guild Aへの閲覧権限を持つユーザーが`?guildId=A`を付けたまま無関係なguild Bのchannel IDを問い合わせると、(a) DBキャッシュに既存の行があればguild Bのチャンネル名がそのまま漏洩し、(b) キャッシュミス時はBotトークンでDiscord APIから取得した上で`upsertDiscordChannel({channelId, guildId: A, ...})`が実行され、**そのチャンネルのDB上の所属guildIdが誤ってAに書き換わる**(データ破損を伴う二次被害)。新tRPCの`resolveChannels`では以下の両方を必須とする:
 - DBキャッシュ参照を`WHERE channelId = ? AND guildId = ?`の複合条件にする(現状の単一キー検索を廃止)
 - Discord APIから取得した場合は、レスポンスの`guild_id`フィールドと入力`guildId`が一致することを検証し、不一致ならエラーとしてDBに書き込まない(誤った紐付けでの上書きを防ぐ)
 
 **補足(新規DBのため移行汚染の懸念は対象外)**: 本プロジェクトは新規リポジトリでのフルリライトであり(`rewrite-architecture-design.md` §7)、旧本番DBのデータを新DBへ移行する計画は存在しない。従って`discord_channels`相当のテーブルは新規作成され、旧実装の不具合(誤った`guildId`紐付け)によって汚染された既存データを引き継ぐ心配はない。新スキーマが最初から`(channelId, guildId)`複合キー/複合インデックスで設計されていれば十分。
 
-**テスト計画への要求**: 原則1〜3それぞれについて、「アクセス権のないguildId/他guildのリソースIDを渡すと拒否される(かつ`404`で応答する)」ケースを実装計画のテスト項目に必須で含める。特に`resolveChannel`は上記の具体的な穴の回帰テストとして明記する。
+**テスト計画への要求**: 原則1〜3それぞれについて、「アクセス権のないguildId/他guildのリソースIDを渡すと拒否される(かつ`404`で応答する)」ケースを実装計画のテスト項目に必須で含める。特に`resolveChannels`は上記の具体的な穴の回帰テストとして明記する。
 
 ### 3.7 認証・認可のエラーフォールバック方針【確定・全ドメイン共通】
 
@@ -121,6 +121,11 @@
 - §4.6(Discord連携)の`resolveUsers`のキャッシュ+バッチid配列設計は、Discord側にバッチ取得APIが無い制約下で「実質的な呼び出し回数の最小化」を体現したパターンとして踏襲する。
 
 **テスト計画への要求**: `guilds.list`について、候補guild数を増やしてもDBクエリ発行回数が定数(N+1にならない)であることを確認するテスト(クエリ実行回数のアサーション、またはDBモックの呼び出し回数検証)を実装計画のテスト項目に含める。
+
+**追加で発見した非効率(修正対象)**
+
+- **`health`の3プローブが逐次実行**: 旧`createHealthReport`(`health.ts`)はDB/Redis/VOICEVOXの3チェックを`for...of`+`await`で順番に実行しており、合計レイテンシが「各チェックの合計」になる(例: 各チェックが最悪3秒かかる場合、逐次だと最大9秒、並列なら最大3秒)。各プローブ(`measureHealthProbe`)は例外を投げず結果オブジェクトを返す設計のため、単純に`Promise.all`に置き換えれば安全に並列化できる。新実装(§3.5の共有シークレットヘッダー方式ハンドラ)では3プローブを`Promise.all`で並列実行する。
+- **チャンネル名の一括解決APIが存在しない**: DB層の`listDiscordChannelNamesByIds`は既に`channelIds: string[]`を受け取るバッチ関数だが、旧HTTPルートは単一チャンネル専用(`/api/discord/channels/[channelId]`)しか公開しておらず、複数チャンネル名が必要な画面(募集一覧の`voiceChannelId`表示、Temp VC一覧等)ではチャンネル数だけ個別リクエストが発生する構造だった。新tRPCでは`resolveUsers`と同じ形で**`resolveChannels(guildId, channelIds[], { requiredCapability })`という複数id版を用意し、DB層の既存バッチ能力をそのままAPIとして公開する**(単一チャンネルの解決もこのバッチ版にid配列1件で呼べば足りるため、単一版は別途用意しない)。Discord APIから新規取得した複数チャンネルをDBキャッシュに書き込む際も、個別upsertではなく一括upsertにまとめる。
 
 ## 4. ドメイン別詳細
 
@@ -207,12 +212,12 @@
 **意図的に落とす/変える機能**
 
 - close/reopenの「本人 or admin以上」制約は新capabilityモデル(`creatorId === ctx.userId || manage_recruitment保有`)でも同等ロジックとして維持する。
-- 【確定】`voiceChannelId`を今回あわせて正式対応する。旧実装は`createRecruitment`の入力に含まれておらず常にnull扱いだったが、新実装では募集作成フォームにVoiceチャンネルセレクター(§Discord ID解決系、`view_recruitment`で`resolveChannel`/チャンネル一覧取得)を追加し、`recruitment.router.create`の入力に`voiceChannelId?: string`を正式に持たせ、募集メッセージ生成(`buildRecruitmentMessage`相当)でも表示するようにする。
+- 【確定】`voiceChannelId`を今回あわせて正式対応する。旧実装のDB層(`recruitments`テーブル・`createRecruitment`関数・`RecruitmentSummaryItem`)は実は既に`voiceChannelId`カラムをサポート済みで、抜けていたのは`POST /api/panel/recruitment`(APIルート)がリクエストボディからこの値を`createRecruitment`へ渡していなかった点のみだった(DBスキーマ自体の欠落ではない)。新実装では募集作成フォームにVoiceチャンネルセレクター(§Discord ID解決系、`view_recruitment`で`resolveChannels`/チャンネル一覧取得)を追加し、`recruitment.router.create`の入力に`voiceChannelId?: string`を正式に持たせてDB層まで貫通させ、募集メッセージ生成(`buildRecruitmentMessage`相当)でも表示するようにする。
 
 **移行時の落とし穴**
 
 - Discordメッセージ投稿・更新の失敗を握りつぶしAPIレスポンスは成功扱いにする非同期副作用パターンは、tRPCの`mutation`でも同様に「DB操作の成功可否とDiscord同期の成功可否を分離する」設計を踏襲する必要がある(全体をtry/catchで失敗にすると、DBは更新済みなのにエラー表示される不整合が起きる)。
-- `voiceChannelId`正式対応に伴い、募集DBスキーマに新規カラムが必要になる可能性が高い(旧スキーマに保存先が無かったため)。実装計画でマイグレーション要否を確認する。
+- `voiceChannelId`正式対応自体はDB層の既存パターン(旧`recruitments`テーブルに倣う)を新スキーマにそのまま含めればよく、追加のマイグレーション設計は不要と見込まれる。API/フロントの実装(セレクター追加・procedure入力への追加)が主な作業になる。
 - 締切定数(`RECRUITMENT_DEADLINE_DEFAULT_DAYS`等)は`packages/shared`に移設が必要(フロント・バック双方参照)。
 
 ### 4.5 ログ/概要/Voice/ヘルスチェック
@@ -254,7 +259,7 @@
 **新tRPC対応案**(§3.3の方針)
 
 - `dashboard-access.router.resolveUsers(guildId, ids[], { requiredCapability })` — **guildId必須化**(旧では省略可能だった穴を塞ぐ)。汎用ガードは新設せず、呼び出し元ドメインが要求capabilityを指定する(§3.3で確定)。
-- `dashboard-access.router.resolveChannel(guildId, channelId, { requiredCapability })` / `searchGuildMembers(guildId, query, { requiredCapability })` — 同様に呼び出し元が要求capabilityを指定。旧ロジックのguildId検証パターン自体は踏襲するが、`resolveChannel`は§3.6で発見した「DBキャッシュがguildIdを見ていない」不備を修正した実装にする(複合条件検索+`guild_id`突合)。
+- `dashboard-access.router.resolveChannels(guildId, channelIds[], { requiredCapability })` / `searchGuildMembers(guildId, query, { requiredCapability })` — 同様に呼び出し元が要求capabilityを指定。旧ロジックのguildId検証パターン自体は踏襲するが、`resolveChannels`は§3.6で発見した「DBキャッシュがguildIdを見ていない」不備を修正した実装にする(複合条件検索+`guild_id`突合)。旧実装は単一チャンネル専用(`[channelId]`)だったが、§3.8で発見したとおりDB層は既にバッチ対応済みのため、新tRPCでは`resolveUsers`と同じく複数id版として公開する(単一チャンネルの解決もid配列1件で呼ぶ)。
 
 **意図的に落とす/変える機能**
 
@@ -276,11 +281,11 @@
 4. **TTS話者IDのVOICEVOX実在性検証**: 保存時に`listSpeakers`と照合するチェックを新規に追加する(対象はspeakerIdのみ、辞書エントリは検証対象外)。§4.3
 5. **Discord ID解決系(users/channels/members)の権限ガード**: 汎用ガードは新設せず、呼び出し元ドメインが要求capabilityをその都度指定する。§3.3
 6. **`overview`の当日ログ上限**: `countTodayLogs`(件数集計)と`listLogs`(ページング一覧)に分離し、1000件固定上限は廃止する。§4.5
-7. **募集の`voiceChannelId`**: 今回あわせて正式対応する(DBスキーマ追加を伴う想定)。§4.4
+7. **募集の`voiceChannelId`**: 今回あわせて正式対応する。旧DB層は既に対応済みだったため新スキーマも同パターンを含めればよく、主作業はAPI/フロント側の貫通(procedure入力・セレクター追加)。§4.4
 8. **manage_access委任制約(§6.4)**: 設計書どおり適用する(旧owner専用 → manage_access保有者も自分の保有ビットのサブセットを委任可能。ただし呼び出し元がそもそも`manage_access`を保有 or ownerであることが前提の二段階チェック、§4.1)。
 9. **`searchGuildMembers`のレート制限対策**: 今回あわせて対応する。`users`系と同様の短命TTLキャッシュ+429リトライを追加する。§4.6
 10. **認証・認可のエラーフォールバック**: 「確実に権限がない」と「Discord APIが一時的に確認できなかった」をエラーコードレベルで区別する。旧実装の2つの不備(リフレッシュ失敗原因の未区別、ロールID取得の例外未捕捉)を修正し、認可経路にもDiscord APIリトライを導入する。§3.7
-11. **API/DB呼び出しの最小化(N+1回避)**: ループ内の逐次呼び出しを避け、バッチクエリ/並列化/キャッシュで呼び出し回数を最小化する。`guilds.list`のDBクエリN+1(旧実装で発見)をバッチ版に置き換える。§3.8
+11. **API/DB呼び出しの最小化(N+1回避)**: ループ内の逐次呼び出しを避け、バッチクエリ/並列化/キャッシュで呼び出し回数を最小化する。`guilds.list`のDBクエリN+1(旧実装で発見)をバッチ版に置き換える。`health`の3プローブ逐次実行を`Promise.all`による並列実行に変更し、チャンネル名解決は単一チャンネル専用APIを廃止して`resolveChannels`(複数id版)に統一する。§3.8
 
 ### 5.1 今回未使用のcapabilityビット
 
