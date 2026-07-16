@@ -8,7 +8,16 @@ import {
   listGrantsForPrincipal
 } from "./dashboard-access.js";
 
-function createFakeDb(initialRows: Array<Record<string, unknown>> = []) {
+interface PrincipalCriteria {
+  guildId: string;
+  userId: string;
+  roleIds: string[];
+}
+
+function createFakeDb(
+  initialRows: Array<Record<string, unknown>> = [],
+  principalCriteria?: PrincipalCriteria
+) {
   const rows = [...initialRows];
 
   const fakeDb = {
@@ -17,7 +26,20 @@ function createFakeDb(initialRows: Array<Record<string, unknown>> = []) {
       return {
         from() {
           return {
-            where: async () => rows.filter(() => true)
+            where: async () =>
+              rows.filter((row) => {
+                if (!principalCriteria) return true;
+                if (row.guildId !== principalCriteria.guildId) return false;
+                if (
+                  row.targetType === "user" &&
+                  row.targetId === principalCriteria.userId
+                )
+                  return true;
+                return (
+                  row.targetType === "role" &&
+                  principalCriteria.roleIds.includes(row.targetId as string)
+                );
+              })
           };
         }
       };
@@ -87,36 +109,43 @@ describe("ensureEveryoneBaselineGrant", () => {
 
 describe("listGrantsForPrincipal", () => {
   it("returns rows matching the user id or any of the role ids", async () => {
-    const db = createFakeDb([
-      {
-        id: "row-0",
-        guildId: "guild-1",
-        targetType: "user",
-        targetId: "user-1",
-        capabilities: 1n
-      },
-      {
-        id: "row-1",
-        guildId: "guild-1",
-        targetType: "role",
-        targetId: "role-everyone",
-        capabilities: 2n
-      },
-      {
-        id: "row-2",
-        guildId: "guild-1",
-        targetType: "role",
-        targetId: "role-mod",
-        capabilities: 4n
-      }
-    ]);
-
-    const rows = await listGrantsForPrincipal(db, {
+    const criteria = {
       guildId: "guild-1",
       userId: "user-1",
       roleIds: ["role-everyone"]
-    });
+    };
+    const db = createFakeDb(
+      [
+        {
+          id: "row-0",
+          guildId: "guild-1",
+          targetType: "user",
+          targetId: "user-1",
+          capabilities: 1n
+        },
+        {
+          id: "row-1",
+          guildId: "guild-1",
+          targetType: "role",
+          targetId: "role-everyone",
+          capabilities: 2n
+        },
+        {
+          id: "row-2",
+          guildId: "guild-1",
+          targetType: "role",
+          targetId: "role-mod",
+          capabilities: 4n
+        }
+      ],
+      criteria
+    );
 
-    assert.equal(rows.length, 3);
+    const rows = await listGrantsForPrincipal(db, criteria);
+
+    assert.deepEqual(
+      rows.map((row) => row.id).sort(),
+      ["row-0", "row-1"]
+    );
   });
 });
