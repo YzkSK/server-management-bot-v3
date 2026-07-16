@@ -106,6 +106,14 @@ describe("capability wire (de)serialization", () => {
   it("rejects a wire string with bits beyond the known capability table", () => {
     assert.throws(() => parseCapabilitiesWireString((1n << 99n).toString(10)), RangeError);
   });
+
+  it("rejects serializing a negative bigint", () => {
+    assert.throws(() => capabilitiesToWireString(-1n), RangeError);
+  });
+
+  it("rejects serializing a bigint with bits beyond the known capability table", () => {
+    assert.throws(() => capabilitiesToWireString(1n << 99n), RangeError);
+  });
 });
 
 describe("canGrantCapabilities with out-of-range inputs", () => {

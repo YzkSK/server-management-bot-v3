@@ -61,6 +61,10 @@ export function canGrantCapabilities(input: CanGrantCapabilitiesInput): boolean 
 }
 
 export function capabilitiesToWireString(value: bigint): string {
+  if (!isKnownCapabilities(value)) {
+    throw new RangeError(`Cannot serialize unknown capabilities: ${value}`);
+  }
+
   return value.toString(10);
 }
 
