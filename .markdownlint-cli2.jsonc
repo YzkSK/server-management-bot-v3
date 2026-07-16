@@ -1,0 +1,17 @@
+{
+  "config": {
+    "default": true,
+    // 既存ドキュメントの記法(見出し直下のリスト、パディングなしの日本語表など)と衝突するため無効化
+    "MD013": false, // line-length: 長文の日本語行が多いため
+    "MD022": false, // blanks-around-headings
+    "MD031": false, // blanks-around-fences
+    "MD032": false, // blanks-around-lists
+    "MD033": false, // no-inline-html
+    "MD036": false, // no-emphasis-as-heading
+    "MD041": false, // first-line-heading
+    "MD058": false, // blanks-around-tables
+    "MD060": false // table-column-style
+  },
+  "globs": ["**/*.md"],
+  "ignores": ["**/node_modules/**", "**/dist/**", "**/.next/**", ".superpowers/**"]
+}
