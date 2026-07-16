@@ -25,9 +25,10 @@
 | `GET/PATCH /api/settings`(全section) | 各ドメインpackageの`router/`に分割 | 1エンドポイント統合→ドメイン別procedureに分割(§4.2) |
 | `GET /api/tts`, `/api/tts-settings`, `/api/tts/preview`, `/api/panel/dictionary`, `/api/panel/speaker`, `/api/panel/speakers` | `packages/tts` router | |
 | `GET /api/recruitments`, `/api/recruitments/[id]`, `/api/panel/recruitment` | `packages/recruitment` router | |
-| `GET /api/logs`, `/api/overview` | `packages/logging` router(overviewは集約層、§4.3) | |
+| `GET /api/logs` | `packages/logging` router | |
+| `GET /api/overview` | `apps/dashboard`集約層(tRPC routerではない) | voice/recruitment/loggingの各routerを横断呼び出しして結合(§3.2) |
 | `GET /api/voice` | `packages/voice` router | |
-| `GET /api/health` | `dashboard`アプリ直下(ドメインパッケージ化しない) | インフラ死活監視、ドメイン非依存 |
+| `GET /api/health` | `apps/dashboard`直下、tRPC外の素のHTTPハンドラ | 共有シークレットヘッダー認証、capabilityモデル非依存(§3.5) |
 | `GET /api/discord/users(/[userId])`, `/api/discord/channels/[channelId]`, `/api/discord/guilds/[guildId]/members` | `dashboard-access` router(Discord解決系) | 複数ドメインから使う横断ユーティリティ(§4.4) |
 
 ## 3. アーキテクチャ上の論点(先に合意が必要な箇所)
@@ -74,7 +75,7 @@
 **新tRPC対応案**
 
 - `guilds.list`: procedure化。旧ロジックの3段階フィルタは維持しつつ、実効capabilities算出(§6.3の「user-level grant OR 全保有ロールのrole-level grantのOR結合」)に合わせて「1ビットでも持っていれば一覧に含める」に置き換え。
-- `dashboardAccess.list/grant/revoke`: 【確定】`requiredCapability`は単純な`manage_access`ではなく**§6.4の委任制約**(自分が持つビットのサブセットしか付与できない、`manage_access`自体はowner専用)をprocedure内で検査するロジックに置き換える。旧実装は「owner以外は一切触れない」という単純な仕様だったため、**新実装は旧より柔軟(manage_access保有者が委任可能)**になる=意図的な機能拡張として設計書§6.4どおり採用する。
+- `dashboardAccess.list/grant/revoke`: 【確定】認可は**二段階チェック**とする。(1) 呼び出し元が`manage_access`ビットを保有しているか、または対象guildのオーナーであること(=`manage_access`を持たない`view_*`等のみの保有者はそもそも呼び出せない)。(2) (1)を満たした上で、**付与/剥奪しようとしている対象ビットが呼び出し元自身の保有ビットのサブセットであること**(§6.4)、かつ`manage_access`ビット自体の付与/剥奪はguildオーナーのみ可能であること。旧実装は「owner以外は一切触れない」という単純な仕様だったため、**新実装は旧より柔軟(manage_access保有者も(2)の制約内で委任可能)**になる=意図的な機能拡張として設計書§6.4どおり採用する。
 
 **意図的に落とす/変える機能**
 
@@ -125,13 +126,13 @@
 **意図的に落とす/変える機能**
 
 - 辞書登録は旧実装が「重複登録=無条件upsert」だった。この挙動(同一`fromText`への再登録は上書き)は維持する。意図的なエラー化(重複を弾く)は要件変更になるため、変えるなら明示合意が必要。
-- 【確定】speakerId/辞書のVOICEVOX側実在性検証を新規に追加する。旧実装は非負整数であれば任意のIDを保存可能で、プレビュー時に初めてVOICEVOX側のエラーで発覚する不整合があった。新実装では`updateGuildDefaultSpeaker`/`updateMySpeaker`等の保存系procedureで`listSpeakers`の結果とクロスチェックし、存在しないspeakerIdは保存時点で`TRPCError({code: "BAD_REQUEST"})`として弾く。
+- 【確定】**speakerIdのVOICEVOX側実在性検証**を新規に追加する。対象は`updateGuildDefaultSpeaker`/`updateMySpeaker`(speakerIdを持つprocedure)のみ。旧実装は非負整数であれば任意のIDを保存可能で、プレビュー時に初めてVOICEVOX側のエラーで発覚する不整合があった。新実装ではこれらのprocedureで`listSpeakers`の結果とクロスチェックし、存在しないspeakerIdは保存時点で`TRPCError({code: "BAD_REQUEST"})`として弾く。**辞書エントリ(`updateGuildDictionaryEntry`/`updateMyDictionaryEntry`、`fromText`/`toText`)はVOICEVOX側に対応する実体を持たないテキスト変換ルールであり、実在性検証の対象外**(そもそも検証しようがない)。
 
 **移行時の落とし穴**
 
 - `/api/panel/dictionary`のGETは全件取得後にアプリ側で`scope==="user" && userId===自分`をフィルタする非効率実装だった。tRPC移行時はDBクエリ側で絞り込むよう修正して問題ない(振る舞いは変わらない、効率化のみ)。
 - `/api/panel/speakers`はVOICEVOX障害時に空配列を返しエラーと未設定を区別できない仕様だった。tRPCの`TRPCError`で明示的にエラーコードを返すよう変更するかは実装計画で決定(フロント側のエラートースト表示に影響)。
-- speakerId実在性検証の追加により、`listSpeakers`(VOICEVOX呼び出し)への依存が保存系procedureにも生まれる。VOICEVOXが一時的に落ちている間は話者変更・辞書登録の保存自体ができなくなる点をフロント側のエラーメッセージで明示する必要がある。
+- speakerId実在性検証の追加により、`listSpeakers`(VOICEVOX呼び出し)への依存が話者変更系procedureに生まれる。VOICEVOXが一時的に落ちている間は**話者変更のみ**保存できなくなる(辞書登録は影響を受けない)。フロント側のエラーメッセージで区別して明示する必要がある。
 
 ### 4.4 募集(recruitment)
 
@@ -169,8 +170,8 @@
 - `logging.router.listLogs` — `view_logs`(payloadは`view_logs_raw`保有時のみ、§3.4)。既存の`before`+`limit`カーソルページングを維持
 - `logging.router.countTodayLogs` — 【新設・確定】`view_logs`。当日分のログ件数のみを`COUNT`クエリで返す軽量procedure
 - `voice.router.getSummary` — `view_voice`
-- overview集約は§3.2の方針でdashboardアプリ層に配置(特定ドメインrouterには実装しない)
-- health は§3.5で確定した共有シークレットヘッダー方式でprocedure化(tRPC外の素のHTTPハンドラ、ドメインパッケージに属さない)
+- overview集約は§3.2の方針でdashboardアプリ層に配置(tRPC routerではなく、各ドメインrouterを横断呼び出しする集約コード。特定ドメインrouterには実装しない)
+- health は§3.5で確定した共有シークレットヘッダー方式で保護する。tRPCの`protectedProcedure`文脈(NextAuthセッション/capability)には一切乗せず、tRPC外の素のHTTPハンドラとして`apps/dashboard`直下に実装する
 
 **意図的に落とす/変える機能**
 
@@ -192,8 +193,8 @@
 
 **新tRPC対応案**(§3.3の方針)
 
-- `dashboard-access.router.resolveUsers(guildId, ids[])` — **guildId必須化**(旧では省略可能だった穴を塞ぐ)。「そのguildへの何らかのアクセス権」の汎用ガードを新設(§5)。
-- `dashboard-access.router.resolveChannel(guildId, channelId)` / `searchGuildMembers(guildId, query)` — 旧ロジックのguildId検証パターンをそのまま踏襲。
+- `dashboard-access.router.resolveUsers(guildId, ids[], { requiredCapability })` — **guildId必須化**(旧では省略可能だった穴を塞ぐ)。汎用ガードは新設せず、呼び出し元ドメインが要求capabilityを指定する(§3.3で確定)。
+- `dashboard-access.router.resolveChannel(guildId, channelId, { requiredCapability })` / `searchGuildMembers(guildId, query, { requiredCapability })` — 同様に呼び出し元が要求capabilityを指定。旧ロジックのguildId検証パターン自体は踏襲。
 
 **意図的に落とす/変える機能**
 
@@ -212,11 +213,15 @@
 1. **`tts.preview`**: `view_tts`必須にする(旧: 無認証)。§4.3
 2. **`health`**: ダッシュボードのcapabilityモデルとは独立した共有シークレットヘッダー(`x-health-token`)で保護する。§3.5
 3. **募集の作成・close/reopen**: `view_recruitment`のまま(旧仕様継続、格上げしない)。§4.4
-4. **TTS話者ID・辞書のVOICEVOX実在性検証**: 保存時に`listSpeakers`と照合するチェックを新規に追加する。§4.3
+4. **TTS話者IDのVOICEVOX実在性検証**: 保存時に`listSpeakers`と照合するチェックを新規に追加する(対象はspeakerIdのみ、辞書エントリは検証対象外)。§4.3
 5. **Discord ID解決系(users/channels/members)の権限ガード**: 汎用ガードは新設せず、呼び出し元ドメインが要求capabilityをその都度指定する。§3.3
 6. **`overview`の当日ログ上限**: `countTodayLogs`(件数集計)と`listLogs`(ページング一覧)に分離し、1000件固定上限は廃止する。§4.5
 7. **募集の`voiceChannelId`**: 今回あわせて正式対応する(DBスキーマ追加を伴う想定)。§4.4
-8. **manage_access委任制約(§6.4)**: 設計書どおり適用する(旧owner専用 → manage_access保有者も自分の保有ビットのサブセットを委任可能)。§4.1
+8. **manage_access委任制約(§6.4)**: 設計書どおり適用する(旧owner専用 → manage_access保有者も自分の保有ビットのサブセットを委任可能。ただし呼び出し元がそもそも`manage_access`を保有 or ownerであることが前提の二段階チェック、§4.1)。
+
+### 5.1 今回未使用のcapabilityビット
+
+`manage_guild_settings`(設計書§6.1のビット10)は、本書が棚卸しした旧20ルートのいずれにも対応する操作が存在しない。今回のtRPC移行スコープでは**未使用のまま予約**し、どのprocedureにも割り当てない。将来ギルド全体設定(現状スコープ外の機能)を追加する際に使う想定として記録するに留める。
 
 ## 6. 次のステップ
 
