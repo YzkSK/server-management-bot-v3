@@ -62,6 +62,22 @@
 
 旧`/api/health`はDB/Redis/VOICEVOXのレイテンシ・死活情報を完全に無認証で公開していた。この情報は特定ギルドに紐づかず「サーバー運営者」というダッシュボードのcapabilityモデルとは別軸の権限を必要とするため、**Discordログイン/capabilityとは独立した共有シークレットヘッダー方式**で保護する: `x-health-token`ヘッダー(env変数`HEALTH_CHECK_TOKEN`等で管理)と一致しないリクエストは401で拒否する。監視ツール/CIからの疎通確認はこのトークンを付与して呼び出す運用とする。ダッシュボードのRBAC(capabilities)やNextAuthセッションには一切依存しないため、`dashboard-access`にも属さず`apps/dashboard`直下の独立したミドルウェア/route(またはtRPC外の素のHTTPハンドラ)として実装する。
 
+### 3.6 テナント分離(クロスギルド境界)の実装原則【確定・全ドメイン共通】
+
+「ログインしていればどこかのguildへのアクセス権は検証されている」だけでは不十分で、**guild-scoped procedureは以下3原則を必ず満たす**こととする。これは実装計画・コードレビューで機械的にチェックできる基準として本書に明文化する。
+
+1. **guildId必須+毎リクエスト検証**: 全てのguild-scoped procedureは`guildId`を明示inputに取り、ミドルウェアが「`ctx.userId`が**その**guildIdに対して要求capabilityを持つか」を毎リクエスト計算する(セッションにキャッシュした過去の判定結果を使い回さない)。
+2. **ネストしたリソースIDの所属検証**: `recruitmentId`のようにDBの主キーでリソースを取得するprocedureは、取得後に**そのリソース自身が持つ`guildId`と、入力(または認可済み)の`guildId`が一致するか**を必ず突合する。旧`recruitments/[id]/route.ts`が`recruitment.guildId !== authorization.guild.id`で行っていたパターンを、同種の「IDでリソースを取得する全procedure」に横展開する。**不一致時は原則`404`(NOT_FOUND)に統一する**(`403`だと「そのリソース自体は存在するが権限がない」ことを暴露してしまい、他guildにそのIDのリソースが存在するかどうかの推測に使われうる。監査要件上どうしても`403`で区別したい箇所があれば、その場所だけ例外として実装計画に理由を明記する)。
+3. **DB書き込みは認可済みguildIdを使う**: 認可(原則1)を通過した後のDB操作は、クライアントが送ってきた`guildId`をそのまま使わず、**認可時にサーバー側で確定した`guildId`**を使う。旧`dashboard-access`のDELETE実装(`deleteDashboardAccessGrant(db, {guildId: authorization.guild.id, ...})`)がこのパターンで、他ドメインにも徹底する。
+
+**旧実装で実際に発見した違反(修正必須)**: `GET /api/discord/channels/[channelId]`が使うDBキャッシュ関数`listDiscordChannelNamesByIds`(`packages/db/src/repositories/discord-channels.ts`)は`channelId`のみで検索し`guildId`を一切見ていない。このため、guild Aへの閲覧権限を持つユーザーが`?guildId=A`を付けたまま無関係なguild Bのchannel IDを問い合わせると、(a) DBキャッシュに既存の行があればguild Bのチャンネル名がそのまま漏洩し、(b) キャッシュミス時はBotトークンでDiscord APIから取得した上で`upsertDiscordChannel({channelId, guildId: A, ...})`が実行され、**そのチャンネルのDB上の所属guildIdが誤ってAに書き換わる**(データ破損を伴う二次被害)。新tRPCの`resolveChannel`では以下の両方を必須とする:
+- DBキャッシュ参照を`WHERE channelId = ? AND guildId = ?`の複合条件にする(現状の単一キー検索を廃止)
+- Discord APIから取得した場合は、レスポンスの`guild_id`フィールドと入力`guildId`が一致することを検証し、不一致ならエラーとしてDBに書き込まない(誤った紐付けでの上書きを防ぐ)
+
+**補足(新規DBのため移行汚染の懸念は対象外)**: 本プロジェクトは新規リポジトリでのフルリライトであり(`rewrite-architecture-design.md` §7)、旧本番DBのデータを新DBへ移行する計画は存在しない。従って`discord_channels`相当のテーブルは新規作成され、旧実装の不具合(誤った`guildId`紐付け)によって汚染された既存データを引き継ぐ心配はない。新スキーマが最初から`(channelId, guildId)`複合キー/複合インデックスで設計されていれば十分。
+
+**テスト計画への要求**: 原則1〜3それぞれについて、「アクセス権のないguildId/他guildのリソースIDを渡すと拒否される(かつ`404`で応答する)」ケースを実装計画のテスト項目に必須で含める。特に`resolveChannel`は上記の具体的な穴の回帰テストとして明記する。
+
 ## 4. ドメイン別詳細
 
 ### 4.1 RBAC/認証・アクセス管理
@@ -194,7 +210,7 @@
 **新tRPC対応案**(§3.3の方針)
 
 - `dashboard-access.router.resolveUsers(guildId, ids[], { requiredCapability })` — **guildId必須化**(旧では省略可能だった穴を塞ぐ)。汎用ガードは新設せず、呼び出し元ドメインが要求capabilityを指定する(§3.3で確定)。
-- `dashboard-access.router.resolveChannel(guildId, channelId, { requiredCapability })` / `searchGuildMembers(guildId, query, { requiredCapability })` — 同様に呼び出し元が要求capabilityを指定。旧ロジックのguildId検証パターン自体は踏襲。
+- `dashboard-access.router.resolveChannel(guildId, channelId, { requiredCapability })` / `searchGuildMembers(guildId, query, { requiredCapability })` — 同様に呼び出し元が要求capabilityを指定。旧ロジックのguildId検証パターン自体は踏襲するが、`resolveChannel`は§3.6で発見した「DBキャッシュがguildIdを見ていない」不備を修正した実装にする(複合条件検索+`guild_id`突合)。
 
 **意図的に落とす/変える機能**
 
