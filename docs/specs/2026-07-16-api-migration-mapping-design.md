@@ -47,17 +47,19 @@
 
 旧`/api/overview`はvoice+recruitment+logsの3テーブルを1リクエストで集約していたが、新設計ではドメインパッケージ同士が依存できない。**`overview`用の集約ロジックはどのドメインパッケージにも属さず、`apps/dashboard`側で各ドメインrouterを`createCaller`経由で並列呼び出しして結合する**(tRPCの`router/`ではなく、Server Component側の集約、または`apps/dashboard`専用の薄い集約router)。ドメインパッケージの独立性を守るための構造的な帰結であり、旧実装からの意図的な変更点。
 
-### 3.3 Discord ID解決系(users/channels/members)は`dashboard-access`に置く
+### 3.3 Discord ID解決系(users/channels/members)は`dashboard-access`に置く【確定】
 
-`/api/discord/users`, `/api/discord/channels/[channelId]`, `/api/discord/guilds/[guildId]/members`はログ・募集・TTS・アクセス管理など複数ドメインのセレクター/ピッカーコンポーネントから横断的に使われるユーティリティで、特定ドメインの業務ロジックを持たない。設計書§3の「`dashboard-access`はDiscordロール解決のために`core`のDiscord API薄いラッパーには依存してよい」という規定に沿い、これらは`dashboard-access` routerに集約する。**特定の`capability`ビットではなく「対象guildへの何らかのダッシュボードアクセス権(実効capabilities > 0)」を要求する汎用ガード**を新設し、ドメイン固有のcapability要求とは別枠で扱う(新設計にはまだ存在しない概念のため要決定、§5参照)。
+`/api/discord/users`, `/api/discord/channels/[channelId]`, `/api/discord/guilds/[guildId]/members`はログ・募集・TTS・アクセス管理など複数ドメインのセレクター/ピッカーコンポーネントから横断的に使われるユーティリティで、特定ドメインの業務ロジックを持たない。設計書§3の「`dashboard-access`はDiscordロール解決のために`core`のDiscord API薄いラッパーには依存してよい」という規定に沿い、実装(DB/キャッシュ/Discord API呼び出しロジック)は`dashboard-access` routerに集約する。
+
+**権限ガードは汎用ガードを新設せず、呼び出し元ドメインのcapabilityをその都度指定する**。「対象guildへの何らかのアクセス権があれば通す」という汎用ガードは、意図しない用途への流用や権限境界の曖昧化を招くため採用しない。procedureは`resolveUsers(guildId, ids[], { requiredCapability })`のように呼び出し元が要求capabilityを渡す形にし、例えば募集画面からの利用は`view_recruitment`、アクセス管理画面からの利用は`manage_access`を要求する。実装コストは上がるが、権限境界がAPIシグネチャ上に明示される利点を優先する。
 
 ### 3.4 `view_logs_raw`ビットの使いどころ
 
 新capability一覧には`view_logs`と`view_logs_raw`が別ビットとして既に定義されているが、旧実装の`/api/logs`は`viewer`ロールのみで生の`payload`フィールドまで無条件に返しており、raw/summary相当の区別が実装上存在しなかった。新実装では**`payload`フィールドの返却を`view_logs_raw`保有者に限定し、非保有者には`payload`を省いたレスポンスを返す**設計とする(procedureレベルでレスポンス整形を分岐)。旧仕様からの機能変更点として明示しておく。
 
-### 3.5 `health`の認証要否
+### 3.5 `health`の認証要否【確定】
 
-旧`/api/health`はDB/Redis/VOICEVOXのレイテンシ・死活情報を完全に無認証で公開していた。新設計でも同様に無認証(ロードバランサ/監視ツールからの疎通確認用途を想定)にするか、最低限ログイン必須にするかは要決定(§5)。
+旧`/api/health`はDB/Redis/VOICEVOXのレイテンシ・死活情報を完全に無認証で公開していた。この情報は特定ギルドに紐づかず「サーバー運営者」というダッシュボードのcapabilityモデルとは別軸の権限を必要とするため、**Discordログイン/capabilityとは独立した共有シークレットヘッダー方式**で保護する: `x-health-token`ヘッダー(env変数`HEALTH_CHECK_TOKEN`等で管理)と一致しないリクエストは401で拒否する。監視ツール/CIからの疎通確認はこのトークンを付与して呼び出す運用とする。ダッシュボードのRBAC(capabilities)やNextAuthセッションには一切依存しないため、`dashboard-access`にも属さず`apps/dashboard`直下の独立したミドルウェア/route(またはtRPC外の素のHTTPハンドラ)として実装する。
 
 ## 4. ドメイン別詳細
 
@@ -72,7 +74,7 @@
 **新tRPC対応案**
 
 - `guilds.list`: procedure化。旧ロジックの3段階フィルタは維持しつつ、実効capabilities算出(§6.3の「user-level grant OR 全保有ロールのrole-level grantのOR結合」)に合わせて「1ビットでも持っていれば一覧に含める」に置き換え。
-- `dashboardAccess.list/grant/revoke`: `requiredCapability`は単純な`manage_access`ではなく**§6.4の委任制約**(自分が持つビットのサブセットしか付与できない、`manage_access`自体はowner専用)をprocedure内で検査するロジックに置き換える。旧実装は「owner以外は一切触れない」という単純な仕様だったため、**新実装は旧より柔軟(manage_access保有者が委任可能)**になる=意図的な機能拡張。
+- `dashboardAccess.list/grant/revoke`: 【確定】`requiredCapability`は単純な`manage_access`ではなく**§6.4の委任制約**(自分が持つビットのサブセットしか付与できない、`manage_access`自体はowner専用)をprocedure内で検査するロジックに置き換える。旧実装は「owner以外は一切触れない」という単純な仕様だったため、**新実装は旧より柔軟(manage_access保有者が委任可能)**になる=意図的な機能拡張として設計書§6.4どおり採用する。
 
 **意図的に落とす/変える機能**
 
@@ -118,18 +120,18 @@
 - `tts.router.getGuildSettings` / `updateGuildDefaultSpeaker` / `updateGuildDictionaryEntry` / `deleteGuildDictionaryEntry` — 読み取り`view_tts`、書き込み`manage_tts`
 - `tts.router.getMySpeaker` / `updateMySpeaker` / `deleteMySpeaker` / `getMyDictionary` / `updateMyDictionaryEntry` / `deleteMyDictionaryEntry` — **自分自身の設定のみ**を扱うため`view_tts`で十分(旧仕様どおり、adminでなくてもよい。procedure内で対象を常に`ctx.userId`に固定するため権限昇格の余地がない)
 - `tts.router.listSpeakers` — VOICEVOX話者一覧、`view_tts`
-- `tts.router.preview` — §5で無認証継続か要決定
+- `tts.router.preview` — 【確定】`view_tts`必須にする(旧: 無認証)。オープンプロキシ状態を解消する
 
 **意図的に落とす/変える機能**
 
 - 辞書登録は旧実装が「重複登録=無条件upsert」だった。この挙動(同一`fromText`への再登録は上書き)は維持する。意図的なエラー化(重複を弾く)は要件変更になるため、変えるなら明示合意が必要。
-- speakerId/辞書のVOICEVOX側実在性検証は旧実装に**存在しない**(非負整数であれば任意のIDを保存可能、プレビュー時に初めてVOICEVOX側のエラーで判明)。新実装でも同様に検証なしとするか、`listSpeakers`の結果とクロスチェックして保存時に弾くかは要決定(§5)。ここを直さないと引き続き「保存はできるがプレビューで初めて失敗に気づく」という旧来の不整合が残る。
+- 【確定】speakerId/辞書のVOICEVOX側実在性検証を新規に追加する。旧実装は非負整数であれば任意のIDを保存可能で、プレビュー時に初めてVOICEVOX側のエラーで発覚する不整合があった。新実装では`updateGuildDefaultSpeaker`/`updateMySpeaker`等の保存系procedureで`listSpeakers`の結果とクロスチェックし、存在しないspeakerIdは保存時点で`TRPCError({code: "BAD_REQUEST"})`として弾く。
 
 **移行時の落とし穴**
 
 - `/api/panel/dictionary`のGETは全件取得後にアプリ側で`scope==="user" && userId===自分`をフィルタする非効率実装だった。tRPC移行時はDBクエリ側で絞り込むよう修正して問題ない(振る舞いは変わらない、効率化のみ)。
-- `/api/panel/speakers`はVOICEVOX障害時に空配列を返しエラーと未設定を区別できない仕様だった。tRPCの`TRPCError`で明示的にエラーコードを返すよう変更するかは§5で決定(フロント側のエラートースト表示に影響)。
-- `/api/tts/preview`が本当に無認証(guildIdすら不要)だった点は、意図的な公開エンドポイントなのか単なる実装漏れなのか旧コードから判断できない。§5で方針決定が必須。
+- `/api/panel/speakers`はVOICEVOX障害時に空配列を返しエラーと未設定を区別できない仕様だった。tRPCの`TRPCError`で明示的にエラーコードを返すよう変更するかは実装計画で決定(フロント側のエラートースト表示に影響)。
+- speakerId実在性検証の追加により、`listSpeakers`(VOICEVOX呼び出し)への依存が保存系procedureにも生まれる。VOICEVOXが一時的に落ちている間は話者変更・辞書登録の保存自体ができなくなる点をフロント側のエラーメッセージで明示する必要がある。
 
 ### 4.4 募集(recruitment)
 
@@ -139,16 +141,17 @@
 
 - `recruitment.router.list` — `view_recruitment`
 - `recruitment.router.close` / `reopen` — `view_recruitment`を基本要件としつつ、procedure内で`creatorId === ctx.userId || ctx.capabilities.has(MANAGE_RECRUITMENT)`を追加検査(旧のrole比較による自分の投稿判定を、capabilityベースの「manage権限 or 本人」判定に置き換える)
-- `recruitment.router.getPostChannel` / `create` — **旧仕様どおり`view_recruitment`のみで作成可能とするか、`manage_recruitment`に格上げするかは要決定**(§5)。誰でも募集を立てられる旧仕様は意図的な設計(募集はメンバー主体の機能)である可能性が高いが、明示確認が必要。
+- `recruitment.router.getPostChannel` / `create` — 【確定】`view_recruitment`のまま(旧仕様継続)。誰でも募集を立てられる仕様は「募集はメンバー主体の機能」という意図的な設計と判断し、権限格上げはしない。
 
 **意図的に落とす/変える機能**
 
-- 特になし。close/reopenの「本人 or admin以上」制約は新capabilityモデルでも同等ロジックとして維持する。
+- close/reopenの「本人 or admin以上」制約は新capabilityモデル(`creatorId === ctx.userId || manage_recruitment保有`)でも同等ロジックとして維持する。
+- 【確定】`voiceChannelId`を今回あわせて正式対応する。旧実装は`createRecruitment`の入力に含まれておらず常にnull扱いだったが、新実装では募集作成フォームにVoiceチャンネルセレクター(§Discord ID解決系、`view_recruitment`で`resolveChannel`/チャンネル一覧取得)を追加し、`recruitment.router.create`の入力に`voiceChannelId?: string`を正式に持たせ、募集メッセージ生成(`buildRecruitmentMessage`相当)でも表示するようにする。
 
 **移行時の落とし穴**
 
 - Discordメッセージ投稿・更新の失敗を握りつぶしAPIレスポンスは成功扱いにする非同期副作用パターンは、tRPCの`mutation`でも同様に「DB操作の成功可否とDiscord同期の成功可否を分離する」設計を踏襲する必要がある(全体をtry/catchで失敗にすると、DBは更新済みなのにエラー表示される不整合が起きる)。
-- `voiceChannelId`は募集作成時に受け付けているように見えて実際は未実装(常にnull扱い)。新実装で本当に対応するのか、旧仕様のまま「未対応」として明示的に除外するのか§5で確認。
+- `voiceChannelId`正式対応に伴い、募集DBスキーマに新規カラムが必要になる可能性が高い(旧スキーマに保存先が無かったため)。実装計画でマイグレーション要否を確認する。
 - 締切定数(`RECRUITMENT_DEADLINE_DEFAULT_DAYS`等)は`packages/shared`に移設が必要(フロント・バック双方参照)。
 
 ### 4.5 ログ/概要/Voice/ヘルスチェック
@@ -163,18 +166,19 @@
 
 **新tRPC対応案**
 
-- `logging.router.listLogs` — `view_logs`(payloadは`view_logs_raw`保有時のみ、§3.4)
+- `logging.router.listLogs` — `view_logs`(payloadは`view_logs_raw`保有時のみ、§3.4)。既存の`before`+`limit`カーソルページングを維持
+- `logging.router.countTodayLogs` — 【新設・確定】`view_logs`。当日分のログ件数のみを`COUNT`クエリで返す軽量procedure
 - `voice.router.getSummary` — `view_voice`
 - overview集約は§3.2の方針でdashboardアプリ層に配置(特定ドメインrouterには実装しない)
-- health は§3.5で方針決定後にprocedure化(ドメインパッケージに属さない)
+- health は§3.5で確定した共有シークレットヘッダー方式でprocedure化(tRPC外の素のHTTPハンドラ、ドメインパッケージに属さない)
 
 **意図的に落とす/変える機能**
 
-- 特になし(ページング・フィルタ仕様は維持)。
+- 【確定】`overview`の当日ログ`limit:1000`固定を廃止する。旧実装が1000件固定にしていたのは「その日のイベント総数」を表示するためだったと判明したため、**件数表示用途は`logging.router.countTodayLogs`(集計のみ、DB側で`COUNT`)に分離し、一覧表示用途は`logging.router.listLogs`のページング(`nextCursor`)に委ねる**。overview集約層は「件数」と「先頭N件のプレビュー」を別々に取得し、一覧全体が必要な場面ではlogsページ側の通常ページングに誘導する。
 
 **移行時の落とし穴**
 
-- `overview`の当日ログ`limit:1000`固定は、1000件超過時に無言で切り捨てられる仕様だった。集約層をdashboardアプリに移す際、この上限をそのまま踏襲するか、`nextCursor`を返してフロントが「もっと見る」できるようにするかは実装計画で詰める(本書では現状維持を推奨)。
+- 件数取得(`countTodayLogs`)は`COUNT`クエリのみでpayload等を取得しないため、旧実装よりDB負荷・レスポンスサイズは軽くなる想定。ただし当日ログ件数が多いギルドでは`COUNT`自体のコストがゼロではない点に注意(インデックス設計は実装計画で確認)。
 - Socket.ioの認証(Cookie手動decode)は`dashboard-access`パッケージの共通ヘルパーとして切り出し、tRPCの`protectedProcedure`とロジックを重複させない(設計書§4に既定のとおり)。
 - `voice`のフロント側は実は専用リアルタイムイベントを持たず、`logs:event`ストリームを間借りして`voice.*`イベント検知時にreloadする実装だった。新設計でSocket.ioチャネルを再設計するなら、この「間借り」を維持するか専用購読にするかは別セッションのVoice機能設計で扱う(本書はAPI層の範囲外として明記のみ)。
 
@@ -201,17 +205,19 @@
 - `channels`のDBキャッシュには無効化ロジックが無く、Discord側で改名されても追従しない。新実装でTTL付きにするか、Botのchannel updateイベントで無効化するかは別セッション(logging/core実装)で扱う課題として記録するに留める。
 - `members`検索にはリトライ・キャッシュが無く、検索デバウンス(フロント300ms)頼みだった。新実装で強化するかは§5で確認。
 
-## 5. 未確定事項リスト(設計判断が必要)
+## 5. 設計判断の確定内容
 
-1. **`tts.preview`は無認証のまま公開するか**、`view_tts`必須にするか。無認証だと誰でもVOICEVOXにリクエストを飛ばせるオープンプロキシ状態が続く。
-2. **`health`は無認証のまま**にするか、最低限ログイン必須にするか。DB/Redis/VOICEVOXの内部レイテンシ情報の公開範囲の問題。
-3. **募集の作成・close/reopenの基本要件を`view_recruitment`のままにするか**、`manage_recruitment`に格上げするか(旧仕様は「誰でも募集を立てられる」)。
-4. **TTS話者ID・辞書のVOICEVOX側実在性検証を新規に追加するか**、旧仕様どおり無検証のままにするか。
-5. **Discord ID解決系(users/channels/members)の権限ガードの形**: 特定capabilityビットではなく「対象guildへの実効capabilities > 0」という汎用ガードを新設する方針(§3.3)でよいか。
-6. **`overview`の当日ログ1000件上限**をそのまま踏襲するか、ページング対応するか。
-7. **募集作成の`voiceChannelId`**を新実装で正式対応するか、旧仕様どおり未対応のまま(UIからは選択させない)にするか。
-8. **manage_access委任制約(§6.4)の新規適用**により、旧「owner専用」から「manage_access保有者も委任可能」に変わる点(§4.1)の影響範囲の最終確認。
+すべて2026-07-16のレビューで確定した。
+
+1. **`tts.preview`**: `view_tts`必須にする(旧: 無認証)。§4.3
+2. **`health`**: ダッシュボードのcapabilityモデルとは独立した共有シークレットヘッダー(`x-health-token`)で保護する。§3.5
+3. **募集の作成・close/reopen**: `view_recruitment`のまま(旧仕様継続、格上げしない)。§4.4
+4. **TTS話者ID・辞書のVOICEVOX実在性検証**: 保存時に`listSpeakers`と照合するチェックを新規に追加する。§4.3
+5. **Discord ID解決系(users/channels/members)の権限ガード**: 汎用ガードは新設せず、呼び出し元ドメインが要求capabilityをその都度指定する。§3.3
+6. **`overview`の当日ログ上限**: `countTodayLogs`(件数集計)と`listLogs`(ページング一覧)に分離し、1000件固定上限は廃止する。§4.5
+7. **募集の`voiceChannelId`**: 今回あわせて正式対応する(DBスキーマ追加を伴う想定)。§4.4
+8. **manage_access委任制約(§6.4)**: 設計書どおり適用する(旧owner専用 → manage_access保有者も自分の保有ビットのサブセットを委任可能)。§4.1
 
 ## 6. 次のステップ
 
-本書の§5未確定事項について合意が取れ次第、`writing-plans`スキルで実装計画(パッケージ別のrouter定義順序、zodスキーマ、テスト計画)を作成する。ドメインパッケージ(`packages/tts`, `packages/recruitment`, `packages/logging`, `packages/voice`, `packages/dashboard-access`)のいずれから着手するかも実装計画で決定する。
+設計判断が確定したため、`writing-plans`スキルで実装計画(パッケージ別のrouter定義順序、zodスキーマ、DBマイグレーション要否、テスト計画)を作成する。ドメインパッケージ(`packages/tts`, `packages/recruitment`, `packages/logging`, `packages/voice`, `packages/dashboard-access`)のいずれから着手するかも実装計画で決定する。
