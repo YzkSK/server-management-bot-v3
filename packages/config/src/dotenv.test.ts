@@ -1,22 +1,33 @@
 import assert from "node:assert/strict";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, it } from "node:test";
 
-import { loadRootEnv } from "./dotenv.js";
+import { defaultRootEnvPath, loadRootEnv } from "./dotenv.js";
 
 const TEST_KEY = "SM_BOT_CONFIG_TEST_VALUE";
-const currentDir = dirname(fileURLToPath(import.meta.url));
-const rootEnvPath = resolve(currentDir, "../../../../.env");
+
+function findRepoRoot(startDir: string): string {
+  let dir = startDir;
+  for (;;) {
+    const packageJsonPath = join(dir, "package.json");
+    if (existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+        name?: string;
+      };
+      if (packageJson.name === "server-management-bot-v3") {
+        return dir;
+      }
+    }
+    const parentDir = dirname(dir);
+    if (parentDir === dir) {
+      throw new Error("could not locate the repository root from " + startDir);
+    }
+    dir = parentDir;
+  }
+}
 
 describe("loadRootEnv", () => {
   let originalValue: string | undefined;
@@ -44,24 +55,10 @@ describe("loadRootEnv", () => {
     }
   });
 
-  it("defaults to the repository root .env file", () => {
-    originalValue = process.env[TEST_KEY];
-    const rootEnvExisted = existsSync(rootEnvPath);
-    const rootEnvOriginalContent = rootEnvExisted
-      ? readFileSync(rootEnvPath, "utf8")
-      : undefined;
-    try {
-      writeFileSync(rootEnvPath, `${TEST_KEY}=from-root-env\n`);
+  it("resolves its default path to the repository root .env file, without writing to disk", () => {
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+    const repoRoot = findRepoRoot(currentDir);
 
-      loadRootEnv();
-
-      assert.equal(process.env[TEST_KEY], "from-root-env");
-    } finally {
-      if (rootEnvOriginalContent === undefined) {
-        unlinkSync(rootEnvPath);
-      } else {
-        writeFileSync(rootEnvPath, rootEnvOriginalContent);
-      }
-    }
+    assert.equal(defaultRootEnvPath, join(repoRoot, ".env"));
   });
 });
