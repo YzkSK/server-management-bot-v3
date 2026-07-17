@@ -15,7 +15,10 @@
       "name": "@sm-bot/bot",
       "version": "0.1.0",
       "dependencies": {
+        "@sm-bot/config": "workspace:*",
+        "@sm-bot/core": "workspace:*",
         "@sm-bot/db": "workspace:*",
+        "discord.js": "^14.27.0",
       },
       "devDependencies": {
         "typescript": "^7.0.2",
