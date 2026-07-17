@@ -11,6 +11,16 @@
         "typescript": "^7.0.2",
       },
     },
+    "apps/bot": {
+      "name": "@sm-bot/bot",
+      "version": "0.1.0",
+      "dependencies": {
+        "@sm-bot/db": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "^7.0.2",
+      },
+    },
     "packages/config": {
       "name": "@sm-bot/config",
       "version": "0.1.0",
@@ -149,6 +159,8 @@
     "@sapphire/snowflake": ["@sapphire/snowflake@3.5.5", "", {}, "sha512-xzvBr1Q1c4lCe7i6sRnrofxeO1QTP/LKQ6A6qy0iB4x5yfiSfARMEQEghojzTNALDTcv8En04qYNIco9/K9eZQ=="],
 
     "@sindresorhus/merge-streams": ["@sindresorhus/merge-streams@4.0.0", "", {}, "sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ=="],
+
+    "@sm-bot/bot": ["@sm-bot/bot@workspace:apps/bot"],
 
     "@sm-bot/config": ["@sm-bot/config@workspace:packages/config"],
 
