@@ -32,7 +32,9 @@ export const dashboardAccessGrants = pgTable(
   "dashboard_access_grants",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    guildId: text("guild_id").notNull(),
+    guildId: text("guild_id")
+      .notNull()
+      .references(() => guilds.guildId, { onDelete: "cascade" }),
     targetType: text("target_type").notNull(),
     targetId: text("target_id").notNull(),
     capabilities: bigint("capabilities", { mode: "bigint" })
