@@ -20,6 +20,11 @@ export const appEnvSchema = z.object({
 });
 
 export const databaseEnvSchema = appEnvSchema.pick({ DATABASE_URL: true });
+export const botEnvSchema = appEnvSchema.pick({
+  DISCORD_BOT_TOKEN: true,
+  DATABASE_URL: true,
+  LOG_LEVEL: true
+});
 export const redisEnvSchema = appEnvSchema.pick({ REDIS_URL: true });
 export const dashboardAuthEnvSchema = appEnvSchema
   .pick({
@@ -34,6 +39,7 @@ export const dashboardAuthEnvSchema = appEnvSchema
 
 export type AppEnv = z.infer<typeof appEnvSchema>;
 export type DatabaseEnv = z.infer<typeof databaseEnvSchema>;
+export type BotEnv = z.infer<typeof botEnvSchema>;
 export type RedisEnv = z.infer<typeof redisEnvSchema>;
 export type DashboardAuthEnv = z.infer<typeof dashboardAuthEnvSchema>;
 
@@ -45,6 +51,10 @@ export function parseDatabaseEnv(
   env: NodeJS.ProcessEnv = process.env
 ): DatabaseEnv {
   return databaseEnvSchema.parse(env);
+}
+
+export function parseBotEnv(env: NodeJS.ProcessEnv = process.env): BotEnv {
+  return botEnvSchema.parse(env);
 }
 
 export function parseRedisEnv(env: NodeJS.ProcessEnv = process.env): RedisEnv {

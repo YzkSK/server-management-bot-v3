@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 
 import {
   parseAppEnv,
+  parseBotEnv,
   parseDashboardAuthEnv,
   parseDatabaseEnv,
   parseRedisEnv
@@ -67,6 +68,32 @@ describe("parseRedisEnv", () => {
 
   it("throws a ZodError when REDIS_URL is missing", () => {
     assert.throws(() => parseRedisEnv({}), ZodError);
+  });
+});
+
+describe("parseBotEnv", () => {
+  it("only requires DISCORD_BOT_TOKEN and DATABASE_URL, defaulting LOG_LEVEL", () => {
+    const result = parseBotEnv({
+      DISCORD_BOT_TOKEN: validEnv.DISCORD_BOT_TOKEN,
+      DATABASE_URL: validEnv.DATABASE_URL
+    });
+    assert.equal(result.DISCORD_BOT_TOKEN, validEnv.DISCORD_BOT_TOKEN);
+    assert.equal(result.DATABASE_URL, validEnv.DATABASE_URL);
+    assert.equal(result.LOG_LEVEL, "info");
+  });
+
+  it("throws a ZodError when DISCORD_BOT_TOKEN is missing", () => {
+    assert.throws(
+      () => parseBotEnv({ DATABASE_URL: validEnv.DATABASE_URL }),
+      ZodError
+    );
+  });
+
+  it("throws a ZodError when DATABASE_URL is missing", () => {
+    assert.throws(
+      () => parseBotEnv({ DISCORD_BOT_TOKEN: validEnv.DISCORD_BOT_TOKEN }),
+      ZodError
+    );
   });
 });
 
