@@ -88,6 +88,13 @@ describe("parseBotEnv", () => {
       ZodError
     );
   });
+
+  it("throws a ZodError when DATABASE_URL is missing", () => {
+    assert.throws(
+      () => parseBotEnv({ DISCORD_BOT_TOKEN: validEnv.DISCORD_BOT_TOKEN }),
+      ZodError
+    );
+  });
 });
 
 describe("parseDashboardAuthEnv", () => {

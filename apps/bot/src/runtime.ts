@@ -35,5 +35,12 @@ export async function startBot(): Promise<void> {
   process.once("SIGTERM", shutdown);
   process.once("SIGINT", shutdown);
 
-  await client.login(env.DISCORD_BOT_TOKEN);
+  try {
+    await client.login(env.DISCORD_BOT_TOKEN);
+  } catch (err) {
+    process.off("SIGTERM", shutdown);
+    process.off("SIGINT", shutdown);
+    await Promise.allSettled([client.destroy(), close()]);
+    throw err;
+  }
 }
