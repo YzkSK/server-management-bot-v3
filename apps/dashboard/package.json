@@ -8,13 +8,16 @@
     "dev": "next dev",
     "lint": "next typegen && tsc -p tsconfig.json --noEmit",
     "start": "next start",
-    "test": "bun test src/server",
+    "test": "bun test src/server src/app",
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@sm-bot/config": "workspace:*",
     "@sm-bot/dashboard-access": "workspace:*",
     "@sm-bot/shared": "workspace:*",
+    "@tanstack/react-query": "^5.80.3",
+    "@trpc/client": "^11.0.0",
+    "@trpc/react-query": "^11.0.0",
     "@trpc/server": "^11.0.0",
     "next": "16.3.0-canary.83",
     "next-auth": "^4.24.14",
