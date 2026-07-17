@@ -7,7 +7,13 @@ import type { DashboardAccessContext } from "@sm-bot/dashboard-access";
 import { dashboardAccessRouter } from "./dashboard-access-router.js";
 
 function context(overrides: Partial<DashboardAccessContext> = {}): DashboardAccessContext {
-  return { userId: "user-1", isGuildOwner: false, capabilities: 0n, ...overrides };
+  return {
+    userId: "user-1",
+    guildId: "guild-1",
+    isGuildOwner: false,
+    capabilities: 0n,
+    ...overrides
+  };
 }
 
 async function rejectsWithCode(promise: Promise<unknown>, code: TRPC_ERROR_CODE_KEY) {
@@ -93,6 +99,22 @@ describe("dashboardAccessRouter.grant (delegation rules)", () => {
         capabilities: "0x10"
       }),
       "BAD_REQUEST"
+    );
+  });
+
+  it("rejects granting into a guild other than the caller's authorized guild", async () => {
+    const caller = dashboardAccessRouter.createCaller(
+      context({ guildId: "guild-1", capabilities: CAP.MANAGE_ACCESS })
+    );
+
+    await rejectsWithCode(
+      caller.grant({
+        guildId: "guild-2",
+        targetType: "user",
+        targetId: "user-2",
+        capabilities: CAP.MANAGE_VOICE.toString(10)
+      }),
+      "FORBIDDEN"
     );
   });
 

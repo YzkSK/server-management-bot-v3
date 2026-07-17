@@ -9,7 +9,13 @@ import { protectedProcedure, requireCapability, router } from "./trpc.js";
 import type { DashboardAccessContext } from "./trpc-context.js";
 
 function context(overrides: Partial<DashboardAccessContext> = {}): DashboardAccessContext {
-  return { userId: "user-1", isGuildOwner: false, capabilities: 0n, ...overrides };
+  return {
+    userId: "user-1",
+    guildId: "guild-1",
+    isGuildOwner: false,
+    capabilities: 0n,
+    ...overrides
+  };
 }
 
 const testRouter = router({

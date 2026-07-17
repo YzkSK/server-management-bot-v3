@@ -40,6 +40,10 @@ export const dashboardAccessRouter = router({
   grant: requireCapability(CAP.MANAGE_ACCESS)
     .input(grantInput)
     .mutation(({ ctx, input }) => {
+      if (ctx.guildId !== input.guildId) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
       const requested = input.capabilities;
 
       const allowed = canGrantCapabilities({
