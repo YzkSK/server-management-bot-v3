@@ -15,3 +15,13 @@ bun run db:generate
 bun run db:migrate
 bun run build
 ```
+
+### Discord OAuth (dashboard login)
+
+Dashboardへのログインは Discord OAuth2 を使用します。
+[Discord Developer Portal](https://discord.com/developers/applications) で対象アプリケーションの
+OAuth2 設定を開き、Redirects に以下の URL を追加してください。
+
+```text
+http://localhost:3000/api/auth/callback/discord
+```

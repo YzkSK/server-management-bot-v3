@@ -11,7 +11,9 @@
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@sm-bot/config": "workspace:*",
     "next": "16.3.0-canary.83",
+    "next-auth": "^4.24.14",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
