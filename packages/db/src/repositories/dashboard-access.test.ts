@@ -198,4 +198,38 @@ describe("listGrantsForPrincipal", () => {
       ["row-0", "row-1"]
     );
   });
+
+  it("returns only the user grant when roleIds is empty", async () => {
+    const criteria = {
+      guildId: "guild-1",
+      userId: "user-1",
+      roleIds: [] as string[]
+    };
+    const db = createFakeDb(
+      [
+        {
+          id: "row-0",
+          guildId: "guild-1",
+          targetType: "user",
+          targetId: "user-1",
+          capabilities: 1n
+        },
+        {
+          id: "row-1",
+          guildId: "guild-1",
+          targetType: "role",
+          targetId: "role-everyone",
+          capabilities: 2n
+        }
+      ],
+      criteria
+    );
+
+    const rows = await listGrantsForPrincipal(db, criteria);
+
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      ["row-0"]
+    );
+  });
 });
