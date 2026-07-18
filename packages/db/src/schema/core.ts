@@ -4,6 +4,8 @@ import {
   bigint,
   boolean,
   check,
+  index,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -64,6 +66,39 @@ export const dashboardAccessGrants = pgTable(
     capabilitiesRangeCheck: check(
       "dashboard_access_grants_capabilities_check",
       sql`${table.capabilities} >= 0 and (${table.capabilities} | ${sql.raw(ALL_CAPABILITIES.toString())}) = ${sql.raw(ALL_CAPABILITIES.toString())}`
+    )
+  })
+);
+
+export const logs = pgTable(
+  "logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventName: text("event_name").notNull(),
+    guildId: text("guild_id").references(() => guilds.guildId, {
+      onDelete: "cascade"
+    }),
+    actorId: text("actor_id"),
+    channelId: text("channel_id"),
+    messageId: text("message_id"),
+    eventTimestamp: timestamp("event_timestamp", {
+      withTimezone: true
+    }).notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    realtimeEnabled: boolean("realtime_enabled").notNull().default(false),
+    payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`)
+  },
+  (table) => ({
+    eventNameIdx: index("logs_event_name_idx").on(table.eventName),
+    guildIdIdx: index("logs_guild_id_idx").on(table.guildId),
+    actorIdIdx: index("logs_actor_id_idx").on(table.actorId),
+    channelIdIdx: index("logs_channel_id_idx").on(table.channelId),
+    receivedAtIdx: index("logs_received_at_idx").on(table.receivedAt),
+    guildReceivedAtIdx: index("logs_guild_received_at_idx").on(
+      table.guildId,
+      table.receivedAt
     )
   })
 );

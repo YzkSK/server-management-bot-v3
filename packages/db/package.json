@@ -19,7 +19,7 @@
     "db:migrate": "drizzle-kit migrate",
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json && node --test dist/src/repositories/dashboard-access.test.js dist/src/schema/dashboard-access-grants.test.js",
+    "test": "tsc -p tsconfig.json && node --test dist/src/repositories/dashboard-access.test.js dist/src/schema/dashboard-access-grants.test.js dist/src/schema/logs.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -1,5 +1,5 @@
 {
-  "name": "@sm-bot/shared",
+  "name": "@sm-bot/logging",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,11 +13,11 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json && node --test dist/src/capabilities.test.js dist/src/events.test.js dist/src/logs.test.js",
+    "test": "tsc -p tsconfig.json && node --test dist/src/domain/realtime-policy.test.js dist/src/application/log-stream.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "zod": "^3.24.1"
+    "@sm-bot/shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^7.0.2"
