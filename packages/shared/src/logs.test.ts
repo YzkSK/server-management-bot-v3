@@ -49,4 +49,28 @@ describe("normalizedEventSchema", () => {
     const { payload: _payload, ...withoutPayload } = base;
     assert.throws(() => normalizedEventSchema.parse(withoutPayload));
   });
+
+  it("rejects an eventName longer than 128 characters", () => {
+    assert.throws(() =>
+      normalizedEventSchema.parse({ ...base, eventName: "a".repeat(129) })
+    );
+  });
+
+  for (const field of ["eventTimestamp", "receivedAt"] as const) {
+    it(`rejects null for ${field}`, () => {
+      assert.throws(() =>
+        normalizedEventSchema.parse({ ...base, [field]: null })
+      );
+    });
+
+    it(`rejects 0 for ${field}`, () => {
+      assert.throws(() => normalizedEventSchema.parse({ ...base, [field]: 0 }));
+    });
+
+    it(`rejects a malformed date string for ${field}`, () => {
+      assert.throws(() =>
+        normalizedEventSchema.parse({ ...base, [field]: "not-a-date" })
+      );
+    });
+  }
 });

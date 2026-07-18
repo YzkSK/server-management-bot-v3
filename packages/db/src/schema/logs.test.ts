@@ -86,10 +86,12 @@ describe("logs schema constraints", () => {
     const inserted = await insertLogEvent(connection.db, {
       eventName: "system.bot.started",
       guildId: null,
+      eventTimestamp: new Date(),
       payload: {}
     });
 
     assert.equal(inserted.guildId, null);
+    await connection.db.delete(logs).where(eq(logs.id, inserted.id));
   });
 
   it("rejects a guildId that has no matching guilds row via the FK constraint", async () => {
@@ -97,6 +99,7 @@ describe("logs schema constraints", () => {
       insertLogEvent(connection.db, {
         eventName: "member.join",
         guildId: `nonexistent-${randomUUID()}`,
+        eventTimestamp: new Date(),
         payload: {}
       }),
       (rawError: unknown) => {
@@ -112,6 +115,7 @@ describe("logs schema constraints", () => {
     await insertLogEvent(connection.db, {
       eventName: "member.join",
       guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(),
       payload: {}
     });
 

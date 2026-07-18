@@ -1,16 +1,16 @@
+import type { NormalizedEvent } from "@sm-bot/shared";
+
 import type { DbClient } from "../client.js";
 import { logs } from "../schema/index.js";
 
-export interface InsertLogEventInput {
-  eventName: string;
+export interface InsertLogEventInput
+  extends Pick<NormalizedEvent, "eventName" | "eventTimestamp" | "payload"> {
   guildId?: string | null;
   actorId?: string | null;
   channelId?: string | null;
   messageId?: string | null;
-  eventTimestamp?: Date;
   receivedAt?: Date;
   realtimeEnabled?: boolean;
-  payload?: Record<string, unknown>;
 }
 
 export async function insertLogEvent(
@@ -25,10 +25,10 @@ export async function insertLogEvent(
       actorId: input.actorId ?? null,
       channelId: input.channelId ?? null,
       messageId: input.messageId ?? null,
-      eventTimestamp: input.eventTimestamp ?? new Date(),
+      eventTimestamp: input.eventTimestamp,
       receivedAt: input.receivedAt ?? new Date(),
       realtimeEnabled: input.realtimeEnabled ?? false,
-      payload: input.payload ?? {}
+      payload: input.payload
     })
     .returning();
 

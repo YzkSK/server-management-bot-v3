@@ -58,16 +58,14 @@ export async function appendRealtimeLogEventToStream(
   event: NormalizedEvent,
   options: AppendLogEventOptions = {}
 ) {
-  const parsedEvent = normalizedEventSchema.parse(event);
-
-  if (!parsedEvent.guildId) {
+  if (!event.guildId) {
     return null;
   }
 
   return redis.xAdd(
-    `${REALTIME_LOGS_STREAM_PREFIX}${parsedEvent.guildId}`,
+    `${REALTIME_LOGS_STREAM_PREFIX}${event.guildId}`,
     "*",
-    toLogStreamFields(parsedEvent, options)
+    toLogStreamFields(event, options)
   );
 }
 
