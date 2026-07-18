@@ -97,6 +97,9 @@
     "packages/shared": {
       "name": "@sm-bot/shared",
       "version": "0.1.0",
+      "dependencies": {
+        "zod": "^3.24.1",
+      },
       "devDependencies": {
         "typescript": "^7.0.2",
       },

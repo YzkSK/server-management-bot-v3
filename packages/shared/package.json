@@ -13,8 +13,11 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json && node --test dist/src/capabilities.test.js",
+    "test": "tsc -p tsconfig.json && node --test dist/src/capabilities.test.js dist/src/events.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "typescript": "^7.0.2"
