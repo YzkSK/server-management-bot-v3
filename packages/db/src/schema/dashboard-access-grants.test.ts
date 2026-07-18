@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { parseDatabaseEnv } from "@sm-bot/config";
@@ -7,7 +8,8 @@ import { eq } from "drizzle-orm";
 import { createDbConnection, type DbConnection } from "../client.js";
 import { dashboardAccessGrants, guilds } from "./index.js";
 
-const TEST_GUILD_ID = "schema-regression-guild";
+const TEST_GUILD_ID = `schema-regression-${randomUUID()}`;
+const LOCAL_DB_HOSTS = ["localhost", "127.0.0.1"];
 
 interface PostgresError {
   code?: string;
@@ -32,14 +34,30 @@ function unwrapPostgresError(error: unknown): unknown {
   return error;
 }
 
+// This suite deletes/inserts rows against whatever DATABASE_URL points at, so
+// refuse to run against anything that isn't the local dev/CI Postgres.
+function assertLocalDatabase(databaseUrl: string): void {
+  const hostname = new URL(databaseUrl).hostname;
+  assert.ok(
+    LOCAL_DB_HOSTS.includes(hostname),
+    `DATABASE_URL must point at a local database (${LOCAL_DB_HOSTS.join(", ")}), got host "${hostname}"`
+  );
+}
+
 describe("dashboard_access_grants schema constraints", () => {
   let connection: DbConnection;
 
   before(() => {
-    connection = createDbConnection(parseDatabaseEnv().DATABASE_URL);
+    const databaseUrl = parseDatabaseEnv().DATABASE_URL;
+    assertLocalDatabase(databaseUrl);
+    connection = createDbConnection(databaseUrl);
   });
 
   after(async () => {
+    await connection.db
+      .delete(dashboardAccessGrants)
+      .where(eq(dashboardAccessGrants.guildId, TEST_GUILD_ID));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, TEST_GUILD_ID));
     await connection.close();
   });
 
@@ -127,5 +145,27 @@ describe("dashboard_access_grants schema constraints", () => {
       .returning({ id: dashboardAccessGrants.id });
 
     assert.equal(inserted.length, 0);
+  });
+
+  it("advances updatedAt when a grant is updated through Drizzle", async () => {
+    const [created] = await connection.db
+      .insert(dashboardAccessGrants)
+      .values({
+        guildId: TEST_GUILD_ID,
+        targetType: "user",
+        targetId: "user-updated-at",
+        capabilities: 0n
+      })
+      .returning();
+    assert.ok(created);
+
+    const [updated] = await connection.db
+      .update(dashboardAccessGrants)
+      .set({ capabilities: 1n })
+      .where(eq(dashboardAccessGrants.id, created.id))
+      .returning();
+    assert.ok(updated);
+
+    assert.ok(updated.updatedAt.getTime() > created.updatedAt.getTime());
   });
 });
