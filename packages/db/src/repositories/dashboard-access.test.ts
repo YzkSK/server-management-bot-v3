@@ -198,4 +198,10 @@ describe("listGrantsForPrincipal", () => {
       ["row-0", "row-1"]
     );
   });
+
+  // roleIds空配列のケースは、生成されるSQL条件そのものを検証する必要があるため、
+  // ここではなく実PostgreSQLを使った統合テスト
+  // (schema/dashboard-access-grants.test.ts) でカバーする。
+  // fakeDbのwhereはprincipalCriteriaを直接評価しており、
+  // listGrantsForPrincipalの実装分岐を回帰検出できないため。
 });

@@ -6,6 +6,7 @@ import { parseDatabaseEnv } from "@sm-bot/config";
 import { eq } from "drizzle-orm";
 
 import { createDbConnection, type DbConnection } from "../client.js";
+import { listGrantsForPrincipal } from "../repositories/dashboard-access.js";
 import { dashboardAccessGrants, guilds } from "./index.js";
 
 const TEST_GUILD_ID = `schema-regression-${randomUUID()}`;
@@ -167,5 +168,33 @@ describe("dashboard_access_grants schema constraints", () => {
     assert.ok(updated);
 
     assert.ok(updated.updatedAt.getTime() > created.updatedAt.getTime());
+  });
+
+  it("listGrantsForPrincipal returns only the user grant when roleIds is empty", async () => {
+    await connection.db.insert(dashboardAccessGrants).values([
+      {
+        guildId: TEST_GUILD_ID,
+        targetType: "user",
+        targetId: "user-1",
+        capabilities: 1n
+      },
+      {
+        guildId: TEST_GUILD_ID,
+        targetType: "role",
+        targetId: "role-everyone",
+        capabilities: 2n
+      }
+    ]);
+
+    const rows = await listGrantsForPrincipal(connection.db, {
+      guildId: TEST_GUILD_ID,
+      userId: "user-1",
+      roleIds: []
+    });
+
+    assert.deepEqual(
+      rows.map((row) => row.targetId),
+      ["user-1"]
+    );
   });
 });

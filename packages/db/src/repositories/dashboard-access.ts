@@ -59,22 +59,24 @@ export async function listGrantsForPrincipal(
   db: DbClient,
   input: ListGrantsForPrincipalInput
 ): Promise<DashboardAccessGrantRow[]> {
-  return db
-    .select()
-    .from(dashboardAccessGrants)
-    .where(
-      and(
-        eq(dashboardAccessGrants.guildId, input.guildId),
-        or(
-          and(
-            eq(dashboardAccessGrants.targetType, "user"),
-            eq(dashboardAccessGrants.targetId, input.userId)
-          ),
+  const userFilter = and(
+    eq(dashboardAccessGrants.targetType, "user"),
+    eq(dashboardAccessGrants.targetId, input.userId)
+  );
+
+  const principalFilter =
+    input.roleIds.length === 0
+      ? userFilter
+      : or(
+          userFilter,
           and(
             eq(dashboardAccessGrants.targetType, "role"),
             inArray(dashboardAccessGrants.targetId, input.roleIds)
           )
-        )
-      )
-    );
+        );
+
+  return db
+    .select()
+    .from(dashboardAccessGrants)
+    .where(and(eq(dashboardAccessGrants.guildId, input.guildId), principalFilter));
 }
