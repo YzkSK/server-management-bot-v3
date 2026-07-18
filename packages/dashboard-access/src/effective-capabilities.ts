@@ -8,8 +8,6 @@ export interface ResolveEffectiveCapabilitiesInput {
 export function resolveEffectiveCapabilities(
   input: ResolveEffectiveCapabilitiesInput
 ): bigint {
-  if (input.isGuildOwner) return ALL_CAPABILITIES;
-
   for (const grant of input.grants) {
     if (!isKnownCapabilities(grant.capabilities)) {
       throw new RangeError(
@@ -17,6 +15,8 @@ export function resolveEffectiveCapabilities(
       );
     }
   }
+
+  if (input.isGuildOwner) return ALL_CAPABILITIES;
 
   return combineCapabilities(...input.grants.map((grant) => grant.capabilities));
 }

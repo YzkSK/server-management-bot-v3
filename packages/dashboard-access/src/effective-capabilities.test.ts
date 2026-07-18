@@ -57,12 +57,14 @@ describe("resolveEffectiveCapabilities", () => {
     );
   });
 
-  it("does not validate grants when the principal is the guild owner", () => {
-    const result = resolveEffectiveCapabilities({
-      grants: [{ capabilities: -1n }],
-      isGuildOwner: true
-    });
-
-    assert.equal(result, ALL_CAPABILITIES);
+  it("rejects an invalid grant even when the principal is the guild owner", () => {
+    assert.throws(
+      () =>
+        resolveEffectiveCapabilities({
+          grants: [{ capabilities: -1n }],
+          isGuildOwner: true
+        }),
+      RangeError
+    );
   });
 });
