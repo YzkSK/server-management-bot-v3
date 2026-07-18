@@ -197,4 +197,42 @@ describe("dashboard_access_grants schema constraints", () => {
       ["user-1"]
     );
   });
+
+  it("listGrantsForPrincipal returns rows ordered by targetType then targetId", async () => {
+    await connection.db.insert(dashboardAccessGrants).values([
+      {
+        guildId: TEST_GUILD_ID,
+        targetType: "role",
+        targetId: "role-z",
+        capabilities: 1n
+      },
+      {
+        guildId: TEST_GUILD_ID,
+        targetType: "user",
+        targetId: "user-1",
+        capabilities: 2n
+      },
+      {
+        guildId: TEST_GUILD_ID,
+        targetType: "role",
+        targetId: "role-a",
+        capabilities: 4n
+      }
+    ]);
+
+    const rows = await listGrantsForPrincipal(connection.db, {
+      guildId: TEST_GUILD_ID,
+      userId: "user-1",
+      roleIds: ["role-z", "role-a"]
+    });
+
+    assert.deepEqual(
+      rows.map((row) => [row.targetType, row.targetId]),
+      [
+        ["role", "role-a"],
+        ["role", "role-z"],
+        ["user", "user-1"]
+      ]
+    );
+  });
 });

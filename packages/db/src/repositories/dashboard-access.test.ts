@@ -80,20 +80,22 @@ function createFakeDb(
       return {
         from() {
           return {
-            where: async () =>
-              rows.filter((row) => {
-                if (!principalCriteria) return true;
-                if (row.guildId !== principalCriteria.guildId) return false;
-                if (
-                  row.targetType === "user" &&
-                  row.targetId === principalCriteria.userId
-                )
-                  return true;
-                return (
-                  row.targetType === "role" &&
-                  principalCriteria.roleIds.includes(row.targetId as string)
-                );
-              })
+            where: () => ({
+              orderBy: async () =>
+                rows.filter((row) => {
+                  if (!principalCriteria) return true;
+                  if (row.guildId !== principalCriteria.guildId) return false;
+                  if (
+                    row.targetType === "user" &&
+                    row.targetId === principalCriteria.userId
+                  )
+                    return true;
+                  return (
+                    row.targetType === "role" &&
+                    principalCriteria.roleIds.includes(row.targetId as string)
+                  );
+                })
+            })
           };
         }
       };
@@ -204,4 +206,8 @@ describe("listGrantsForPrincipal", () => {
   // (schema/dashboard-access-grants.test.ts) でカバーする。
   // fakeDbのwhereはprincipalCriteriaを直接評価しており、
   // listGrantsForPrincipalの実装分岐を回帰検出できないため。
+  //
+  // 同様の理由で、orderByによる並び順の安定性の検証も、SQLのORDER BY句が
+  // 実際に適用されることを確認する必要があるため、実PostgreSQLを使った統合テスト
+  // (schema/dashboard-access-grants.test.ts) でカバーする。
 });
