@@ -35,6 +35,8 @@ export async function startBot(): Promise<void> {
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
+      // privileged intent: Discord Developer PortalでMessage Content Intentを
+      // 有効化しないと、message.contentが常に空文字になる。
       GatewayIntentBits.MessageContent
     ],
     // キャッシュされていないメッセージのupdate/deleteイベントを受け取るためにpartialを有効化する。
