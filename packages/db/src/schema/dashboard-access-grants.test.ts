@@ -199,39 +199,41 @@ describe("dashboard_access_grants schema constraints", () => {
   });
 
   it("listGrantsForPrincipal returns rows ordered by targetType then targetId", async () => {
+    // targetId を敢えて targetType の逆順にし、targetType 昇順が先に効いていることを
+    // targetId 昇順だけでは検出できないよう区別する。
     await connection.db.insert(dashboardAccessGrants).values([
       {
         guildId: TEST_GUILD_ID,
         targetType: "role",
-        targetId: "role-z",
+        targetId: "z-role",
         capabilities: 1n
       },
       {
         guildId: TEST_GUILD_ID,
         targetType: "user",
-        targetId: "user-1",
+        targetId: "a-user",
         capabilities: 2n
       },
       {
         guildId: TEST_GUILD_ID,
         targetType: "role",
-        targetId: "role-a",
+        targetId: "b-role",
         capabilities: 4n
       }
     ]);
 
     const rows = await listGrantsForPrincipal(connection.db, {
       guildId: TEST_GUILD_ID,
-      userId: "user-1",
-      roleIds: ["role-z", "role-a"]
+      userId: "a-user",
+      roleIds: ["z-role", "b-role"]
     });
 
     assert.deepEqual(
       rows.map((row) => [row.targetType, row.targetId]),
       [
-        ["role", "role-a"],
-        ["role", "role-z"],
-        ["user", "user-1"]
+        ["role", "b-role"],
+        ["role", "z-role"],
+        ["user", "a-user"]
       ]
     );
   });
