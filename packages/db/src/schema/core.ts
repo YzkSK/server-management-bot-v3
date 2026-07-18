@@ -36,7 +36,7 @@ export const dashboardAccessGrants = pgTable(
     guildId: text("guild_id")
       .notNull()
       .references(() => guilds.guildId, { onDelete: "cascade" }),
-    targetType: text("target_type").notNull(),
+    targetType: text("target_type").notNull().$type<"user" | "role">(),
     targetId: text("target_id").notNull(),
     capabilities: bigint("capabilities", { mode: "bigint" })
       .notNull()
