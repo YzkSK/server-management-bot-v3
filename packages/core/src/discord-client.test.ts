@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { GatewayIntentBits } from "discord.js";
+import { GatewayIntentBits, Partials } from "discord.js";
 
 import { createDiscordClient } from "./discord-client.js";
 
@@ -22,5 +22,24 @@ describe("createDiscordClient", () => {
     });
 
     assert.equal(client.token, null);
+  });
+
+  it("configures no partials by default", () => {
+    const client = createDiscordClient({
+      token: "dummy-token",
+      intents: [GatewayIntentBits.Guilds]
+    });
+
+    assert.deepEqual(client.options.partials, []);
+  });
+
+  it("configures the given partials when provided", () => {
+    const client = createDiscordClient({
+      token: "dummy-token",
+      intents: [GatewayIntentBits.Guilds],
+      partials: [Partials.Message, Partials.Channel]
+    });
+
+    assert.deepEqual(client.options.partials, [Partials.Message, Partials.Channel]);
   });
 });

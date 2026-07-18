@@ -6,7 +6,7 @@ import {
   writeLogEvent,
   type RedisStreamWriter
 } from "@sm-bot/logging";
-import { Events, GatewayIntentBits } from "discord.js";
+import { Events, GatewayIntentBits, Partials } from "discord.js";
 import { createClient } from "redis";
 
 import { handleGuildCreate } from "./guild-join.js";
@@ -36,7 +36,10 @@ export async function startBot(): Promise<void> {
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent
-    ]
+    ],
+    // キャッシュされていないメッセージのupdate/deleteイベントを受け取るためにpartialを有効化する。
+    // 有効化しないと、discord.jsはそれらのイベントを部分データとしてすら発火しない。
+    partials: [Partials.Message, Partials.Channel]
   });
 
   client.on(Events.GuildCreate, (guild) => {
