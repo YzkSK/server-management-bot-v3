@@ -22,6 +22,13 @@
       "when": 1784342175435,
       "tag": "0002_melodic_talisman",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784360317240,
+      "tag": "0003_gorgeous_mercury",
+      "breakpoints": true
     }
   ]
 }
