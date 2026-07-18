@@ -5,7 +5,7 @@ import DiscordProvider from "next-auth/providers/discord";
 const env = parseDashboardAuthEnv();
 
 // signInコールバックでのユーザー/ギルド制限は意図的に行っていない(issue #85)。
-// RBAC設計(docs/specs/rewrite-architecture-design.md §6)により、業務操作の認可は
+// RBAC設計(docs/rewrite-architecture-design.md §6)により、業務操作の認可は
 // tRPCルーター層のrequireCapabilityによるcapabilitiesベースの判定に委譲する。
 // capability不要で許可するのは、ログイン状態や自己権限を返すme等の自己参照APIに限定する。
 export const authOptions: AuthOptions = {

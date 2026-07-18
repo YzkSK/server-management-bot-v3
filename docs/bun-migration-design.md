@@ -5,7 +5,7 @@
 
 ## Background
 
-`docs/plans/rewrite-foundation.md` の Task 1 は pnpm workspace + Node.js 24 を前提に書かれていたが、パッケージ管理・実行ランタイムを Bun に統一する方針に変更した。本ドキュメントはその変更をルートワークスペース定義に限定して記録する。
+`docs/superpowers/plans/rewrite-foundation.md` の Task 1 は pnpm workspace + Node.js 24 を前提に書かれていたが、パッケージ管理・実行ランタイムを Bun に統一する方針に変更した。本ドキュメントはその変更をルートワークスペース定義に限定して記録する。
 
 ## Decisions
 
@@ -72,8 +72,8 @@
 
 ## ドキュメント更新
 
-- `docs/plans/rewrite-foundation.md` Task 1 のコードブロック(package.json, workspace定義, tsconfig.base.json, turbo.json)をBun仕様に置換
-- `docs/specs/rewrite-architecture-design.md` の Tech Stack 記述中、パッケージ管理・ランタイムの記載をBunに更新
+- `docs/superpowers/plans/rewrite-foundation.md` Task 1 のコードブロック(package.json, workspace定義, tsconfig.base.json, turbo.json)をBun仕様に置換
+- `docs/rewrite-architecture-design.md` の Tech Stack 記述中、パッケージ管理・ランタイムの記載をBunに更新
 - Task 2 以降の各パッケージ`package.json`(`pnpm --filter`呼び出し、`node --test`実行など)は、実装時に本設計の方針(`bun run --filter`, `bun:test`)へ都度読み替える。本ドキュメントでは先行して書き換えない
 
 ## Out of Scope
