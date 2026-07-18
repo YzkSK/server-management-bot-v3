@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { BASELINE_EVERYONE_CAPABILITIES } from "@sm-bot/shared";
 
+import { dashboardAccessGrants, guilds } from "../schema/index.js";
 import {
   ensureEveryoneBaselineGrant,
   listGrantsForPrincipal
@@ -14,14 +15,67 @@ interface PrincipalCriteria {
   roleIds: string[];
 }
 
+function createFakeTx(
+  rows: Array<Record<string, unknown>>,
+  guildRows: Array<Record<string, unknown>>
+) {
+  return {
+    insert(table: unknown) {
+      if (table === guilds) {
+        return {
+          values(values: Record<string, unknown>) {
+            return {
+              onConflictDoUpdate: async ({
+                set
+              }: {
+                set: Record<string, unknown>;
+              }) => {
+                const existing = guildRows.find(
+                  (row) => row.guildId === values.guildId
+                );
+                if (existing) {
+                  Object.assign(existing, set);
+                } else {
+                  guildRows.push({ ...values });
+                }
+              }
+            };
+          }
+        };
+      }
+
+      return {
+        values(values: Record<string, unknown>) {
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => {
+                const exists = rows.some(
+                  (row) =>
+                    row.guildId === values.guildId &&
+                    row.targetType === values.targetType &&
+                    row.targetId === values.targetId
+                );
+                if (!exists) rows.push({ id: `row-${rows.length}`, ...values });
+                return exists ? [] : [{ id: `row-${rows.length - 1}` }];
+              }
+            })
+          };
+        }
+      };
+    }
+  };
+}
+
 function createFakeDb(
   initialRows: Array<Record<string, unknown>> = [],
   principalCriteria?: PrincipalCriteria
 ) {
   const rows = [...initialRows];
+  const guildRows: Array<Record<string, unknown>> = [];
 
   const fakeDb = {
     rows,
+    guildRows,
     select() {
       return {
         from() {
@@ -44,30 +98,14 @@ function createFakeDb(
         }
       };
     },
-    insert() {
-      return {
-        values(values: Record<string, unknown>) {
-          return {
-            onConflictDoNothing: () => ({
-              returning: async () => {
-                const exists = rows.some(
-                  (row) =>
-                    row.guildId === values.guildId &&
-                    row.targetType === values.targetType &&
-                    row.targetId === values.targetId
-                );
-                if (!exists) rows.push({ id: `row-${rows.length}`, ...values });
-                return exists ? [] : [{ id: `row-${rows.length - 1}` }];
-              }
-            })
-          };
-        }
-      };
-    }
+    transaction: async (
+      fn: (tx: ReturnType<typeof createFakeTx>) => Promise<unknown>
+    ) => fn(createFakeTx(rows, guildRows))
   };
 
   return fakeDb as unknown as import("../client.js").DbClient & {
     rows: typeof rows;
+    guildRows: typeof guildRows;
   };
 }
 
@@ -104,6 +142,18 @@ describe("ensureEveryoneBaselineGrant", () => {
     assert.equal(result.created, false);
     assert.equal(db.rows.length, 1);
     assert.equal(db.rows[0]?.capabilities, 0n);
+  });
+
+  it("upserts the parent guild row before seeding the baseline grant", async () => {
+    const db = createFakeDb();
+
+    await ensureEveryoneBaselineGrant(db, {
+      guildId: "guild-1",
+      everyoneRoleId: "role-everyone"
+    });
+
+    assert.equal(db.guildRows.length, 1);
+    assert.equal(db.guildRows[0]?.guildId, "guild-1");
   });
 });
 

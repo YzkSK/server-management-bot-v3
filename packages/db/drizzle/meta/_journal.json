@@ -8,6 +8,13 @@
       "when": 1784192309463,
       "tag": "0000_windy_mad_thinker",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784304525808,
+      "tag": "0001_peaceful_snowbird",
+      "breakpoints": true
     }
   ]
 }
