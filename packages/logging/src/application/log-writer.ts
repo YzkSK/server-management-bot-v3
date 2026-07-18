@@ -20,8 +20,11 @@ export async function writeLogEvent(
 ): Promise<void> {
   const realtimeEnabled = resolveRealtimeEnabled(event.eventName);
 
+  // logsテーブルへの永続化を正とするため、DB書き込みが成功してからRedis Streamに流す。
+  // 先にstreamへ流すと、DB insert失敗時に「永続化されていないイベント」がstream読者に見えてしまう。
+  await deps.insertLogEvent(deps.db, { ...event, realtimeEnabled });
+
   await Promise.all([
-    deps.insertLogEvent(deps.db, { ...event, realtimeEnabled }),
     appendLogEventToStream(deps.redis, event, { realtimeEnabled }),
     realtimeEnabled
       ? appendRealtimeLogEventToStream(deps.redis, event, { realtimeEnabled })

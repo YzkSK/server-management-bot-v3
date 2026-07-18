@@ -54,12 +54,40 @@ describe("writeLogEvent", () => {
       async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
     );
     const { redis, calls } = createFakeRedis();
+    const db = {} as DbClient;
+    const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
+
+    await writeLogEvent({ db, redis, insertLogEvent }, event);
+
+    assert.equal(insertLogEvent.mock.calls.length, 1);
+    const insertCall = insertLogEvent.mock.calls[0];
+    assert.equal(insertCall?.arguments[0], db);
+    assert.deepEqual(insertCall?.arguments[1], { ...event, realtimeEnabled: true });
+
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0]?.key, "logs:events");
+    assert.equal(calls[0]?.fields.realtime_enabled, "1");
+    assert.equal(calls[1]?.key, `rt:logs:${event.guildId}`);
+    assert.equal(calls[1]?.fields.realtime_enabled, "1");
+  });
+
+  it("writes to the DB before appending to any Redis stream", async () => {
+    const order: string[] = [];
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => {
+      order.push("db");
+      return {} as Awaited<ReturnType<typeof InsertLogEvent>>;
+    });
+    const redis: RedisStreamWriter = {
+      async xAdd(key) {
+        order.push(`redis:${key}`);
+        return "1-0";
+      }
+    };
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
     await writeLogEvent({ db: {} as DbClient, redis, insertLogEvent }, event);
 
-    assert.equal(calls.length, 2);
-    assert.equal(calls[0]?.key, "logs:events");
-    assert.equal(calls[1]?.key, `rt:logs:${event.guildId}`);
+    assert.equal(order[0], "db");
+    assert.equal(order.length, 3);
   });
 });
