@@ -72,26 +72,47 @@ describe("parseRedisEnv", () => {
 });
 
 describe("parseBotEnv", () => {
-  it("only requires DISCORD_BOT_TOKEN and DATABASE_URL, defaulting LOG_LEVEL", () => {
+  it("requires DISCORD_BOT_TOKEN, DATABASE_URL and REDIS_URL, defaulting LOG_LEVEL", () => {
     const result = parseBotEnv({
       DISCORD_BOT_TOKEN: validEnv.DISCORD_BOT_TOKEN,
-      DATABASE_URL: validEnv.DATABASE_URL
+      DATABASE_URL: validEnv.DATABASE_URL,
+      REDIS_URL: validEnv.REDIS_URL
     });
     assert.equal(result.DISCORD_BOT_TOKEN, validEnv.DISCORD_BOT_TOKEN);
     assert.equal(result.DATABASE_URL, validEnv.DATABASE_URL);
+    assert.equal(result.REDIS_URL, validEnv.REDIS_URL);
     assert.equal(result.LOG_LEVEL, "info");
   });
 
   it("throws a ZodError when DISCORD_BOT_TOKEN is missing", () => {
     assert.throws(
-      () => parseBotEnv({ DATABASE_URL: validEnv.DATABASE_URL }),
+      () =>
+        parseBotEnv({
+          DATABASE_URL: validEnv.DATABASE_URL,
+          REDIS_URL: validEnv.REDIS_URL
+        }),
       ZodError
     );
   });
 
   it("throws a ZodError when DATABASE_URL is missing", () => {
     assert.throws(
-      () => parseBotEnv({ DISCORD_BOT_TOKEN: validEnv.DISCORD_BOT_TOKEN }),
+      () =>
+        parseBotEnv({
+          DISCORD_BOT_TOKEN: validEnv.DISCORD_BOT_TOKEN,
+          REDIS_URL: validEnv.REDIS_URL
+        }),
+      ZodError
+    );
+  });
+
+  it("throws a ZodError when REDIS_URL is missing", () => {
+    assert.throws(
+      () =>
+        parseBotEnv({
+          DISCORD_BOT_TOKEN: validEnv.DISCORD_BOT_TOKEN,
+          DATABASE_URL: validEnv.DATABASE_URL
+        }),
       ZodError
     );
   });
