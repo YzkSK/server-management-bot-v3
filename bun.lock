@@ -98,6 +98,7 @@
       "name": "@sm-bot/logging",
       "version": "0.1.0",
       "dependencies": {
+        "@sm-bot/db": "workspace:*",
         "@sm-bot/shared": "workspace:*",
         "discord.js": "^14.27.0",
       },
