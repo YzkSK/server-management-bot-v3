@@ -1,4 +1,4 @@
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import { BASELINE_EVERYONE_CAPABILITIES } from "@sm-bot/shared";
 
@@ -78,5 +78,6 @@ export async function listGrantsForPrincipal(
   return db
     .select()
     .from(dashboardAccessGrants)
-    .where(and(eq(dashboardAccessGrants.guildId, input.guildId), principalFilter));
+    .where(and(eq(dashboardAccessGrants.guildId, input.guildId), principalFilter))
+    .orderBy(asc(dashboardAccessGrants.targetType), asc(dashboardAccessGrants.targetId));
 }
