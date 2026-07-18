@@ -62,7 +62,7 @@ describe("logs schema constraints", () => {
     await connection.db.insert(guilds).values({ guildId: TEST_GUILD_ID });
   });
 
-  it("insertLogEvent inserts a row with defaults applied", async () => {
+  it("insertLogEvent inserts a row with repository defaults applied to optional fields", async () => {
     const eventTimestamp = new Date("2026-07-18T00:00:00.000Z");
 
     const inserted = await insertLogEvent(connection.db, {
