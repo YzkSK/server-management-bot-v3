@@ -28,12 +28,12 @@ export const botEnvSchema = appEnvSchema.pick({
 export const redisEnvSchema = appEnvSchema.pick({ REDIS_URL: true });
 export const dashboardAuthEnvSchema = appEnvSchema
   .pick({
+    DISCORD_CLIENT_ID: true,
     DISCORD_CLIENT_SECRET: true,
     NEXTAUTH_SECRET: true
   })
   .extend({
     DISCORD_BOT_TOKEN: z.string().optional(),
-    DISCORD_CLIENT_ID: z.string().default(""),
     NEXTAUTH_URL: z.string().url().optional()
   });
 
