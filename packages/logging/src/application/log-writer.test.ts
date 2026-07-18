@@ -71,23 +71,53 @@ describe("writeLogEvent", () => {
     assert.equal(calls[1]?.fields.realtime_enabled, "1");
   });
 
-  it("writes to the DB before appending to any Redis stream", async () => {
-    const order: string[] = [];
+  it("does not append to any Redis stream until the DB write resolves", async () => {
+    let resolveDbWrite: (() => void) | undefined;
+    const dbWritePending = new Promise<void>((resolve) => {
+      resolveDbWrite = resolve;
+    });
+    const redisCallsBeforeDbResolved: string[] = [];
     const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => {
-      order.push("db");
+      await dbWritePending;
       return {} as Awaited<ReturnType<typeof InsertLogEvent>>;
     });
     const redis: RedisStreamWriter = {
       async xAdd(key) {
-        order.push(`redis:${key}`);
+        redisCallsBeforeDbResolved.push(key);
         return "1-0";
       }
     };
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
-    await writeLogEvent({ db: {} as DbClient, redis, insertLogEvent }, event);
+    const writePromise = writeLogEvent({ db: {} as DbClient, redis, insertLogEvent }, event);
 
-    assert.equal(order[0], "db");
-    assert.equal(order.length, 3);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.deepEqual(
+      redisCallsBeforeDbResolved,
+      [],
+      "Redis must not be written to before the DB write resolves"
+    );
+
+    resolveDbWrite?.();
+    await writePromise;
+
+    assert.equal(redisCallsBeforeDbResolved.length, 2);
+  });
+
+  it("does not append to any Redis stream when the DB write fails", async () => {
+    const dbError = new Error("db unavailable");
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => {
+      throw dbError;
+    });
+    const { redis, calls } = createFakeRedis();
+    const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
+
+    await assert.rejects(
+      writeLogEvent({ db: {} as DbClient, redis, insertLogEvent }, event),
+      dbError
+    );
+
+    assert.equal(calls.length, 0);
   });
 });
