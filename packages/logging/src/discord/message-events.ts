@@ -27,14 +27,16 @@ export function normalizeMessageUpdate(
   oldMessage: AnyMessage,
   newMessage: AnyMessage
 ): NormalizedEvent | null {
-  // embed unfurl: Discordは埋め込みプレビュー付与時にもMessageUpdateを発火する。
-  // 本文にも添付ファイルにも変化がなければログしない。
-  const contentUnchanged = oldMessage.content === newMessage.content;
-  const attachmentsUnchanged = attachmentUrlsEqual(
-    attachmentPayload(oldMessage),
-    attachmentPayload(newMessage)
-  );
+  // partial(未キャッシュ)なメッセージはcontent/attachmentsがnull/空になるため、
+  // 「変化なし」と誤判定して実際の編集を握り潰さないよう、partial時は不明として必ずログする。
+  const isUncertain = oldMessage.partial === true || newMessage.partial === true;
+  const contentUnchanged = !isUncertain && oldMessage.content === newMessage.content;
+  const attachmentsUnchanged =
+    !isUncertain &&
+    attachmentUrlsEqual(attachmentPayload(oldMessage), attachmentPayload(newMessage));
 
+  // embed unfurl: Discordは埋め込みプレビュー付与時にもMessageUpdateを発火する。
+  // 本文にも添付ファイルにも変化がなければログしない(partial時はこの判定自体を行わない)。
   if (contentUnchanged && attachmentsUnchanged) {
     return null;
   }
@@ -50,7 +52,8 @@ export function normalizeMessageUpdate(
     payload: {
       oldContent: oldMessage.content ?? null,
       newContent: newMessage.content ?? null,
-      attachments: attachmentPayload(newMessage)
+      attachments: attachmentPayload(newMessage),
+      partial: isUncertain
     }
   };
 }

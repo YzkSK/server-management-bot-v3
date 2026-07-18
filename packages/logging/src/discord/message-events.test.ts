@@ -18,6 +18,7 @@ function fakeMessage(overrides: Record<string, unknown> = {}) {
     createdAt: new Date("2026-07-18T00:00:00.000Z"),
     editedAt: null,
     attachments: new Map(),
+    partial: false,
     ...overrides
   } as never;
 }
@@ -131,6 +132,30 @@ describe("normalizeMessageUpdate", () => {
     assert.deepEqual(event?.payload.attachments, [
       { url: "https://cdn/a2.png", name: "a2.png", contentType: "image/png" }
     ]);
+  });
+
+  it("does not skip a partial update even when content and attachments appear unchanged", () => {
+    const attachments = new Map([
+      ["a1", { url: "https://cdn/a1.png", name: "a1.png", contentType: "image/png" }]
+    ]);
+
+    const event = normalizeMessageUpdate(
+      fakeMessage({ content: null, attachments, partial: true }),
+      fakeMessage({ content: null, attachments, partial: true })
+    );
+
+    assert.ok(event, "a partial update must never be silently dropped");
+    assert.equal(event?.payload.partial, true);
+  });
+
+  it("marks a non-partial changed update as not partial", () => {
+    const event = normalizeMessageUpdate(
+      fakeMessage({ content: "old" }),
+      fakeMessage({ content: "new" })
+    );
+
+    assert.ok(event);
+    assert.equal(event?.payload.partial, false);
   });
 
   it("falls back to now for eventTimestamp when editedAt is unavailable", () => {
