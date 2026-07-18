@@ -57,25 +57,48 @@ export async function startBot(): Promise<void> {
     writeLogEvent: (event) =>
       writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
   });
+
+  // shutdown時にDB/Redis接続を閉じる前に、処理中のログ書き込みを待機するための追跡集合。
+  const pendingLogWrites = new Set<Promise<void>>();
+  const trackLogWrite = (promise: Promise<void>): void => {
+    pendingLogWrites.add(promise);
+    void promise.then(
+      () => pendingLogWrites.delete(promise),
+      (err: unknown) => {
+        pendingLogWrites.delete(promise);
+        console.error("bot: message log handler failed unexpectedly", err);
+      }
+    );
+  };
+
   client.on(Events.MessageCreate, (message) => {
-    void messageLogHandlers.onMessageCreate(message);
+    trackLogWrite(messageLogHandlers.onMessageCreate(message));
   });
   client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
-    void messageLogHandlers.onMessageUpdate(oldMessage, newMessage);
+    trackLogWrite(messageLogHandlers.onMessageUpdate(oldMessage, newMessage));
   });
   client.on(Events.MessageDelete, (message) => {
-    void messageLogHandlers.onMessageDelete(message);
+    trackLogWrite(messageLogHandlers.onMessageDelete(message));
   });
 
   client.once(Events.ClientReady, (readyClient) => {
     console.log(`bot started as ${readyClient.user.tag}`);
   });
 
+  let isShuttingDown = false;
+  const closeConnections = async (): Promise<void> => {
+    await client.destroy();
+    await Promise.allSettled(pendingLogWrites);
+    await Promise.allSettled([close(), redisClient.quit()]);
+  };
+
   const shutdown = (signal: NodeJS.Signals) => {
+    if (isShuttingDown) {
+      return;
+    }
+    isShuttingDown = true;
     console.log(`bot: received ${signal}, shutting down`);
-    void Promise.allSettled([client.destroy(), close(), redisClient.quit()]).then(() => {
-      process.exit(0);
-    });
+    void closeConnections().finally(() => process.exit(0));
   };
   process.once("SIGTERM", shutdown);
   process.once("SIGINT", shutdown);
@@ -85,7 +108,8 @@ export async function startBot(): Promise<void> {
   } catch (err) {
     process.off("SIGTERM", shutdown);
     process.off("SIGINT", shutdown);
-    await Promise.allSettled([client.destroy(), close(), redisClient.quit()]);
+    isShuttingDown = true;
+    await closeConnections();
     throw err;
   }
 }

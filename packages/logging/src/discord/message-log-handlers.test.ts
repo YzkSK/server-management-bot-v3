@@ -57,6 +57,18 @@ describe("createMessageLogHandlers", () => {
     assert.equal(writeLogEvent.mock.calls.length, 0);
   });
 
+  it("skips message.update when oldMessage is bot-authored even if newMessage.author is missing", async () => {
+    const writeLogEvent = fakeWriteLogEvent();
+    const handlers = createMessageLogHandlers({ writeLogEvent });
+
+    await handlers.onMessageUpdate(
+      fakeMessage({ author: { id: "bot-1", bot: true }, content: "old" }),
+      fakeMessage({ author: undefined, partial: true, content: null })
+    );
+
+    assert.equal(writeLogEvent.mock.calls.length, 0);
+  });
+
   it("writes a normalized event for message.update when content changed", async () => {
     const writeLogEvent = fakeWriteLogEvent();
     const handlers = createMessageLogHandlers({ writeLogEvent });

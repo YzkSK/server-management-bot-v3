@@ -33,7 +33,7 @@ export function createMessageLogHandlers(
     },
 
     async onMessageUpdate(oldMessage, newMessage) {
-      if (shouldSkipMessageLog(newMessage)) {
+      if (shouldSkipMessageLog(oldMessage) || shouldSkipMessageLog(newMessage)) {
         return;
       }
       const event = normalizeMessageUpdate(oldMessage, newMessage);
