@@ -5,7 +5,7 @@
 
 ## Background
 
-`docs/plans/rewrite-foundation.md` の Task 1 は pnpm workspace + Node.js 24 を前提に書かれていたが、パッケージ管理・実行ランタイムを Bun に統一する方針に変更した。本ドキュメントはその変更をルートワークスペース定義に限定して記録する。
+`docs/superpowers/plans/rewrite-foundation.md` の Task 1 は pnpm workspace + Node.js 24 を前提に書かれていたが、パッケージ管理・実行ランタイムを Bun に統一する方針に変更した。本ドキュメントはその変更をルートワークスペース定義に限定して記録する。
 
 ## Decisions
 
