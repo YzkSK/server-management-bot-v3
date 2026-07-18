@@ -2,7 +2,7 @@
 
 Rewrite of the Discord operations platform. See
 [`docs/current-state-audit.md`](docs/current-state-audit.md) and
-[`docs/specs/rewrite-architecture-design.md`](docs/specs/rewrite-architecture-design.md)
+[`docs/rewrite-architecture-design.md`](docs/rewrite-architecture-design.md)
 for the audit and architecture design this rewrite is based on.
 
 ## Setup
