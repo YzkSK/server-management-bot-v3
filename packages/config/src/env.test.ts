@@ -98,19 +98,47 @@ describe("parseBotEnv", () => {
 });
 
 describe("parseDashboardAuthEnv", () => {
-  it("requires DISCORD_CLIENT_SECRET and NEXTAUTH_SECRET only", () => {
+  it("requires DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET and NEXTAUTH_SECRET only", () => {
     const result = parseDashboardAuthEnv({
+      DISCORD_CLIENT_ID: validEnv.DISCORD_CLIENT_ID,
       DISCORD_CLIENT_SECRET: validEnv.DISCORD_CLIENT_SECRET,
       NEXTAUTH_SECRET: validEnv.NEXTAUTH_SECRET
     });
+    assert.equal(result.DISCORD_CLIENT_ID, validEnv.DISCORD_CLIENT_ID);
     assert.equal(result.DISCORD_CLIENT_SECRET, validEnv.DISCORD_CLIENT_SECRET);
     assert.equal(result.NEXTAUTH_SECRET, validEnv.NEXTAUTH_SECRET);
-    assert.equal(result.DISCORD_CLIENT_ID, "");
+  });
+
+  it("throws a ZodError when DISCORD_CLIENT_ID is missing", () => {
+    assert.throws(
+      () =>
+        parseDashboardAuthEnv({
+          DISCORD_CLIENT_SECRET: validEnv.DISCORD_CLIENT_SECRET,
+          NEXTAUTH_SECRET: validEnv.NEXTAUTH_SECRET
+        }),
+      ZodError
+    );
+  });
+
+  it("throws a ZodError when DISCORD_CLIENT_ID is empty", () => {
+    assert.throws(
+      () =>
+        parseDashboardAuthEnv({
+          DISCORD_CLIENT_ID: "",
+          DISCORD_CLIENT_SECRET: validEnv.DISCORD_CLIENT_SECRET,
+          NEXTAUTH_SECRET: validEnv.NEXTAUTH_SECRET
+        }),
+      ZodError
+    );
   });
 
   it("throws a ZodError when DISCORD_CLIENT_SECRET is missing", () => {
     assert.throws(
-      () => parseDashboardAuthEnv({ NEXTAUTH_SECRET: validEnv.NEXTAUTH_SECRET }),
+      () =>
+        parseDashboardAuthEnv({
+          DISCORD_CLIENT_ID: validEnv.DISCORD_CLIENT_ID,
+          NEXTAUTH_SECRET: validEnv.NEXTAUTH_SECRET
+        }),
       ZodError
     );
   });
