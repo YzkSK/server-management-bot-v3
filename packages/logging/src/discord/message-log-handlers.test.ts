@@ -85,7 +85,17 @@ describe("createMessageLogHandlers", () => {
       throw new Error("db down");
     });
     const handlers = createMessageLogHandlers({ writeLogEvent });
+    const consoleError = mock.method(console, "error", () => undefined);
 
-    await assert.doesNotReject(handlers.onMessageCreate(fakeMessage()));
+    try {
+      await assert.doesNotReject(handlers.onMessageCreate(fakeMessage()));
+
+      assert.equal(consoleError.mock.calls.length, 1);
+      const [, context] = consoleError.mock.calls[0]?.arguments ?? [];
+      assert.equal((context as { eventName?: string }).eventName, "message.create");
+      assert.equal((context as { guildId?: string }).guildId, "guild-1");
+    } finally {
+      consoleError.mock.restore();
+    }
   });
 });
