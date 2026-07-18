@@ -28,14 +28,20 @@ export function normalizeMessageUpdate(
   newMessage: AnyMessage
 ): NormalizedEvent | null {
   // embed unfurl: Discordは埋め込みプレビュー付与時にもMessageUpdateを発火する。
-  // 本文が変わっていなければログしない。
-  if (oldMessage.content !== null && oldMessage.content === newMessage.content) {
+  // 本文にも添付ファイルにも変化がなければログしない。
+  const contentUnchanged = oldMessage.content === newMessage.content;
+  const attachmentsUnchanged = attachmentUrlsEqual(
+    attachmentPayload(oldMessage),
+    attachmentPayload(newMessage)
+  );
+
+  if (contentUnchanged && attachmentsUnchanged) {
     return null;
   }
 
   return {
     eventName: "message.update",
-    eventTimestamp: newMessage.editedAt ?? newMessage.createdAt ?? new Date(),
+    eventTimestamp: newMessage.editedAt ?? new Date(),
     receivedAt: new Date(),
     guildId: newMessage.guildId,
     actorId: newMessage.author?.id ?? null,
@@ -52,7 +58,7 @@ export function normalizeMessageUpdate(
 export function normalizeMessageDelete(message: AnyMessage): NormalizedEvent {
   return {
     eventName: "message.delete",
-    eventTimestamp: message.createdAt ?? new Date(),
+    eventTimestamp: new Date(),
     receivedAt: new Date(),
     guildId: message.guildId,
     actorId: message.author?.id ?? null,
@@ -63,6 +69,20 @@ export function normalizeMessageDelete(message: AnyMessage): NormalizedEvent {
       attachments: attachmentPayload(message)
     }
   };
+}
+
+function attachmentUrlsEqual(
+  a: Array<{ url: string }>,
+  b: Array<{ url: string }>
+): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  const sortedA = a.map((attachment) => attachment.url).sort();
+  const sortedB = b.map((attachment) => attachment.url).sort();
+
+  return sortedA.every((url, index) => url === sortedB[index]);
 }
 
 function attachmentPayload(

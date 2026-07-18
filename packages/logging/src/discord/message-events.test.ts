@@ -99,6 +99,54 @@ describe("normalizeMessageUpdate", () => {
     assert.ok(event);
     assert.equal(event?.payload.newContent, "new");
   });
+
+  it("returns null when both old and new content are null and attachments are unchanged", () => {
+    const attachments = new Map([
+      ["a1", { url: "https://cdn/a1.png", name: "a1.png", contentType: "image/png" }]
+    ]);
+
+    const event = normalizeMessageUpdate(
+      fakeMessage({ content: null, attachments }),
+      fakeMessage({ content: null, attachments })
+    );
+
+    assert.equal(event, null);
+  });
+
+  it("normalizes an update when content is unchanged but attachments changed", () => {
+    const oldAttachments = new Map([
+      ["a1", { url: "https://cdn/a1.png", name: "a1.png", contentType: "image/png" }]
+    ]);
+    const newAttachments = new Map([
+      ["a2", { url: "https://cdn/a2.png", name: "a2.png", contentType: "image/png" }]
+    ]);
+
+    const event = normalizeMessageUpdate(
+      fakeMessage({ content: "same", attachments: oldAttachments }),
+      fakeMessage({ content: "same", attachments: newAttachments })
+    );
+
+    assert.ok(event);
+    assert.equal(event?.payload.newContent, "same");
+    assert.deepEqual(event?.payload.attachments, [
+      { url: "https://cdn/a2.png", name: "a2.png", contentType: "image/png" }
+    ]);
+  });
+
+  it("falls back to now for eventTimestamp when editedAt is unavailable", () => {
+    const before = Date.now();
+
+    const event = normalizeMessageUpdate(
+      fakeMessage({ content: "old" }),
+      fakeMessage({ content: "new", editedAt: null })
+    );
+
+    const after = Date.now();
+
+    assert.ok(event);
+    const timestamp = event?.eventTimestamp.getTime() ?? 0;
+    assert.ok(timestamp >= before && timestamp <= after);
+  });
 });
 
 describe("normalizeMessageDelete", () => {
@@ -108,5 +156,21 @@ describe("normalizeMessageDelete", () => {
     assert.equal(event.eventName, "message.delete");
     assert.equal(event.messageId, "message-1");
     assert.equal(event.payload.content, "hello");
+  });
+
+  it("uses the current time for eventTimestamp, not the stale createdAt", () => {
+    const before = Date.now();
+
+    const event = normalizeMessageDelete(
+      fakeMessage({ createdAt: new Date("2020-01-01T00:00:00.000Z") })
+    );
+
+    const after = Date.now();
+
+    assert.notEqual(
+      event.eventTimestamp.getTime(),
+      new Date("2020-01-01T00:00:00.000Z").getTime()
+    );
+    assert.ok(event.eventTimestamp.getTime() >= before && event.eventTimestamp.getTime() <= after);
   });
 });
