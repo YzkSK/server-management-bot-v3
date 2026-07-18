@@ -29,6 +29,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      DISCORD_CLIENT_ID: build-placeholder
       DISCORD_CLIENT_SECRET: build-placeholder
       NEXTAUTH_SECRET: build-placeholder
       DATABASE_URL: postgres://sm_bot:sm_bot@localhost:5432/sm_bot
