@@ -9,3 +9,4 @@ dist-test/
 !.env.*.example
 .turbo/
 .superpowers/
+docs/superpowers/
