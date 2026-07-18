@@ -50,6 +50,24 @@ export const normalizedEventSchema = z.object({
 });
 ```
 
+## 3.5 検証: 全イベントカテゴリがこのカラム形状に適合することの確認
+
+「できるだけどのログでもカラムの形にそぐうように」という観点で、旧実装の`apps/bot/src/discord/gateway-logs/`配下の全13カテゴリ(channel, role, guild, message, voice, thread/invite, emoji/sticker, automod, integration, poll/audit, scheduled-event, stage)を確認した。
+
+すべてのカテゴリは`payloads.ts`が公開する7つの共通ビルダーのいずれか経由で、最終的に`createEvent()`が返す同一の5フィールド形状に正規化されている。例外(カテゴリ固有の追加トップレベルフィールドを持つもの)は存在しない。
+
+| ビルダー | 用途 | 使用カテゴリ |
+| --- | --- | --- |
+| `createGuildEvent` | guildId+actorIdのみ確定、channel/messageなし | guild, member, role, emoji, sticker, automod, integration, stage, scheduled-event, poll(投票) |
+| `createChannelEvent` | channelId確定、actorIdなし | channel, webhook, message.bulk_delete |
+| `createThreadEvent` | channelId=thread.id | thread |
+| `createInviteEvent` | channelId=招待先チャンネル | invite |
+| `createReactionEvent` | channelId+messageId確定 | message.reaction |
+| `createVoiceEvent` | actorId+channelId確定 | voice |
+| `createEvent`(直接) | 上記に当てはまらない特殊系(message.delete等) | message |
+
+いずれもnullable列(`guildId` / `actorId` / `channelId` / `messageId`)に値が入るか`null`になるかの差でしかなく、カテゴリごとに列を追加する必要はない。この検証により、§4のスキーマがカラム追加なしで全ログカテゴリに適合することを確認した。
+
 ## 4. `packages/db`
 
 ### `src/schema/core.ts`に`logs`テーブルを追記
