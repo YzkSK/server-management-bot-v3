@@ -36,7 +36,7 @@ export interface CanGrantCapabilitiesInput {
   requestedCapabilities: bigint;
 }
 
-function isKnownCapabilities(value: bigint): boolean {
+export function isKnownCapabilities(value: bigint): boolean {
   return value >= 0n && (value & ~ALL_CAPABILITIES) === 0n;
 }
 
