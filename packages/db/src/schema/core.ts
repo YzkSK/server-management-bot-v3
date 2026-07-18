@@ -47,6 +47,7 @@ export const dashboardAccessGrants = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow()
+      .$onUpdateFn(() => new Date())
   },
   (table) => ({
     targetIdx: uniqueIndex("dashboard_access_grants_target_idx").on(
