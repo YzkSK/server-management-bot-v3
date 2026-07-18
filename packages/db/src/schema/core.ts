@@ -36,7 +36,7 @@ export const dashboardAccessGrants = pgTable(
     guildId: text("guild_id")
       .notNull()
       .references(() => guilds.guildId, { onDelete: "cascade" }),
-    targetType: text("target_type").notNull(),
+    targetType: text("target_type").notNull().$type<"user" | "role">(),
     targetId: text("target_id").notNull(),
     capabilities: bigint("capabilities", { mode: "bigint" })
       .notNull()
@@ -47,6 +47,7 @@ export const dashboardAccessGrants = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow()
+      .$onUpdateFn(() => new Date())
   },
   (table) => ({
     targetIdx: uniqueIndex("dashboard_access_grants_target_idx").on(

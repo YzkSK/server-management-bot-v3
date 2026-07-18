@@ -14,9 +14,24 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: sm_bot
+          POSTGRES_USER: sm_bot
+          POSTGRES_PASSWORD: sm_bot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sm_bot -d sm_bot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DISCORD_CLIENT_SECRET: build-placeholder
       NEXTAUTH_SECRET: build-placeholder
+      DATABASE_URL: postgres://sm_bot:sm_bot@localhost:5432/sm_bot
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -34,6 +49,9 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+
+      - name: Migrate database
+        run: bun run db:migrate
 
       - name: Test
         run: bun run test
