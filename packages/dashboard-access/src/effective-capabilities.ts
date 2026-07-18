@@ -9,6 +9,9 @@ export function resolveEffectiveCapabilities(
   input: ResolveEffectiveCapabilitiesInput
 ): bigint {
   for (const grant of input.grants) {
+    if (grant.capabilities < 0n) {
+      throw new RangeError(`Grant contains a negative capabilities value: ${grant.capabilities}`);
+    }
     if (!isKnownCapabilities(grant.capabilities)) {
       throw new RangeError(
         `Grant contains unknown capabilities bits: ${grant.capabilities}`

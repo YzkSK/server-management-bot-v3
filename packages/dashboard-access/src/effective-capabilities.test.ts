@@ -42,7 +42,7 @@ describe("resolveEffectiveCapabilities", () => {
           grants: [{ capabilities: -1n }],
           isGuildOwner: false
         }),
-      RangeError
+      /negative/
     );
   });
 
@@ -53,7 +53,7 @@ describe("resolveEffectiveCapabilities", () => {
           grants: [{ capabilities: CAP.VIEW_LOGS }, { capabilities: 1n << 99n }],
           isGuildOwner: false
         }),
-      RangeError
+      /unknown capabilities bits/
     );
   });
 
