@@ -15,6 +15,13 @@
       "when": 1784304525808,
       "tag": "0001_peaceful_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784342175435,
+      "tag": "0002_melodic_talisman",
+      "breakpoints": true
     }
   ]
 }

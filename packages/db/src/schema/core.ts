@@ -1,3 +1,4 @@
+import { ALL_CAPABILITIES } from "@sm-bot/shared";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -56,6 +57,12 @@ export const dashboardAccessGrants = pgTable(
     targetTypeCheck: check(
       "dashboard_access_grants_target_type_check",
       sql`${table.targetType} in ('user', 'role')`
+    ),
+    // capabilitiesビットを追加/削除したら ALL_CAPABILITIES (packages/shared/src/capabilities.ts) の値が変わるため、
+    // `pnpm db:generate` でマイグレーションを再生成すること。
+    capabilitiesRangeCheck: check(
+      "dashboard_access_grants_capabilities_check",
+      sql`${table.capabilities} >= 0 and (${table.capabilities} | ${sql.raw(ALL_CAPABILITIES.toString())}) = ${sql.raw(ALL_CAPABILITIES.toString())}`
     )
   })
 );

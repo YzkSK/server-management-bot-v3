@@ -1,0 +1,1 @@
+ALTER TABLE "dashboard_access_grants" ADD CONSTRAINT "dashboard_access_grants_capabilities_check" CHECK ("dashboard_access_grants"."capabilities" >= 0 and ("dashboard_access_grants"."capabilities" | 2047) = 2047);
