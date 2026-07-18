@@ -23,6 +23,7 @@ export const databaseEnvSchema = appEnvSchema.pick({ DATABASE_URL: true });
 export const botEnvSchema = appEnvSchema.pick({
   DISCORD_BOT_TOKEN: true,
   DATABASE_URL: true,
+  REDIS_URL: true,
   LOG_LEVEL: true
 });
 export const redisEnvSchema = appEnvSchema.pick({ REDIS_URL: true });

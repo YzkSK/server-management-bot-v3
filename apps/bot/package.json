@@ -15,7 +15,9 @@
     "@sm-bot/config": "workspace:*",
     "@sm-bot/core": "workspace:*",
     "@sm-bot/db": "workspace:*",
-    "discord.js": "^14.27.0"
+    "@sm-bot/logging": "workspace:*",
+    "discord.js": "^14.27.0",
+    "redis": "^4.7.0"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

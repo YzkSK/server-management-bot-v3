@@ -1,8 +1,9 @@
-import { Client, type ClientOptions, type GatewayIntentBits } from "discord.js";
+import { Client, type ClientOptions, type GatewayIntentBits, type Partials } from "discord.js";
 
 export interface CreateDiscordClientOptions {
   token: string;
   intents: readonly GatewayIntentBits[];
+  partials?: readonly Partials[];
 }
 
 /**
@@ -11,7 +12,8 @@ export interface CreateDiscordClientOptions {
  */
 export function createDiscordClient(options: CreateDiscordClientOptions): Client {
   const clientOptions: ClientOptions = {
-    intents: [...options.intents]
+    intents: [...options.intents],
+    partials: [...(options.partials ?? [])]
   };
   return new Client(clientOptions);
 }
