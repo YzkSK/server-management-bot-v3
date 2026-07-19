@@ -89,7 +89,7 @@ export async function startBot(): Promise<void> {
       () => pendingLogWrites.delete(promise),
       (err: unknown) => {
         pendingLogWrites.delete(promise);
-        console.error("bot: message log handler failed unexpectedly", err);
+        console.error("bot: log handler failed unexpectedly", err);
       }
     );
   };

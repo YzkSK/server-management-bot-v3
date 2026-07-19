@@ -39,9 +39,9 @@ export function guildPayload(guild: Guild) {
 export function userPayload(user: User | PartialUser) {
   return {
     id: user.id,
-    username: user.username,
-    globalName: user.globalName,
-    bot: user.bot
+    username: user.username ?? null,
+    globalName: user.globalName ?? null,
+    bot: user.bot ?? null
   };
 }
 
@@ -51,8 +51,8 @@ export function memberPayload(member: GuildMember | PartialGuildMember) {
     displayName: member.displayName,
     nickname: member.nickname,
     user: member.user ? userPayload(member.user) : null,
-    roles: [...member.roles.cache.keys()],
-    pending: member.pending,
+    roles: [...member.roles.cache.keys()].sort(),
+    pending: member.pending ?? null,
     communicationDisabledUntil: member.communicationDisabledUntil?.toISOString() ?? null
   };
 }

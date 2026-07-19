@@ -75,4 +75,13 @@ describe("normalizeMemberUpdate", () => {
     assert.ok(event);
     assert.deepEqual((event?.payload.after as { roles: string[] }).roles, ["role-1", "role-2"]);
   });
+
+  it("does not treat role cache order as a member role change", () => {
+    const event = normalizeMemberUpdate(
+      fakeMember({ roles: { cache: new Map([["role-1", {}], ["role-2", {}]]) } }),
+      fakeMember({ roles: { cache: new Map([["role-2", {}], ["role-1", {}]]) } })
+    );
+
+    assert.equal(event, null);
+  });
 });
