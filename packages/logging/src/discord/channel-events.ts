@@ -93,3 +93,17 @@ function overwritesRecord(
 ): Record<string, unknown> {
   return Object.fromEntries(overwrites.map((overwrite) => [overwrite.id, overwrite]));
 }
+
+export function normalizeWebhookUpdate(channel: NonThreadGuildBasedChannel): NormalizedEvent {
+  const now = new Date();
+  return {
+    eventName: "webhook.update",
+    eventTimestamp: now,
+    receivedAt: now,
+    guildId: channel.guildId,
+    actorId: null,
+    channelId: channel.id,
+    messageId: null,
+    payload: { channel: channelPayload(channel) }
+  };
+}

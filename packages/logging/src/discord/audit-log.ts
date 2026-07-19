@@ -3,7 +3,8 @@ import {
   PermissionFlagsBits,
   type AuditLogEvent,
   type Guild,
-  type GuildAuditLogsEntry
+  type GuildAuditLogsEntry,
+  type Invite
 } from "discord.js";
 
 import { userPayload } from "./payloads.js";
@@ -188,6 +189,10 @@ function isMatchingAuditLogEntry(
   }
 
   return entry.targetId === targetId || getObjectId(entry.target) === targetId;
+}
+
+export function getInviteGuild(invite: Invite): Guild | null {
+  return invite.guild && "fetchAuditLogs" in invite.guild ? (invite.guild as Guild) : null;
 }
 
 function getObjectId(value: unknown): string | null {

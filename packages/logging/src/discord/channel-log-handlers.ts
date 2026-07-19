@@ -5,7 +5,8 @@ import {
   isGuildChannel,
   normalizeChannelCreate,
   normalizeChannelDelete,
-  normalizeChannelUpdate
+  normalizeChannelUpdate,
+  normalizeWebhookUpdate
 } from "./channel-events.js";
 import { correlateWithAuditLog } from "./audit-log.js";
 
@@ -20,6 +21,7 @@ export interface ChannelLogHandlers {
     oldChannel: DMChannel | NonThreadGuildBasedChannel,
     newChannel: DMChannel | NonThreadGuildBasedChannel
   ) => Promise<void>;
+  onWebhooksUpdate: (channel: NonThreadGuildBasedChannel) => Promise<void>;
 }
 
 export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLogHandlers {
@@ -68,6 +70,15 @@ export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLo
           await writeSafely(deps, event);
         }
       }
+    },
+
+    async onWebhooksUpdate(channel) {
+      // Discord Audit LogのWebhookUpdateエントリのtargetIdはwebhook自体のIDであり、
+      // WebhooksUpdateイベントから取得できるchannel.idとは一致しない
+      // (channel.permission_updateが相関対象外なのと同じ理由)。
+      // そのため相関を試みず、actorId: nullのまま記録する。
+      const event = normalizeWebhookUpdate(channel);
+      await writeSafely(deps, event);
     }
   };
 }
