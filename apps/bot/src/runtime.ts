@@ -2,7 +2,11 @@ import { parseBotEnv } from "@sm-bot/config";
 import { createDiscordClient } from "@sm-bot/core";
 import { createDbConnection, ensureEveryoneBaselineGrant, insertLogEvent } from "@sm-bot/db";
 import {
+  createChannelLogHandlers,
+  createGuildLogHandlers,
+  createMemberLogHandlers,
   createMessageLogHandlers,
+  createRoleLogHandlers,
   writeLogEvent,
   type RedisStreamWriter
 } from "@sm-bot/logging";
@@ -37,7 +41,10 @@ export async function startBot(): Promise<void> {
       GatewayIntentBits.GuildMessages,
       // privileged intent: Discord Developer PortalでMessage Content Intentを
       // 有効化しないと、message.contentが常に空文字になる。
-      GatewayIntentBits.MessageContent
+      GatewayIntentBits.MessageContent,
+      // privileged intent: Discord Developer PortalでServer Members Intentを
+      // 有効化しないと、guildMemberAdd/Remove/Updateが発火しない。
+      GatewayIntentBits.GuildMembers
     ],
     // キャッシュされていないメッセージのupdate/deleteイベントを受け取るためにpartialを有効化する。
     // 有効化しないと、discord.jsはそれらのイベントを部分データとしてすら発火しない。
@@ -54,6 +61,22 @@ export async function startBot(): Promise<void> {
   });
 
   const messageLogHandlers = createMessageLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const memberLogHandlers = createMemberLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const roleLogHandlers = createRoleLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const channelLogHandlers = createChannelLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const guildLogHandlers = createGuildLogHandlers({
     writeLogEvent: (event) =>
       writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
   });
@@ -79,6 +102,40 @@ export async function startBot(): Promise<void> {
   });
   client.on(Events.MessageDelete, (message) => {
     trackLogWrite(messageLogHandlers.onMessageDelete(message));
+  });
+
+  client.on(Events.GuildMemberAdd, (member) => {
+    trackLogWrite(memberLogHandlers.onGuildMemberAdd(member));
+  });
+  client.on(Events.GuildMemberRemove, (member) => {
+    trackLogWrite(memberLogHandlers.onGuildMemberRemove(member));
+  });
+  client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
+    trackLogWrite(memberLogHandlers.onGuildMemberUpdate(oldMember, newMember));
+  });
+
+  client.on(Events.GuildRoleCreate, (role) => {
+    trackLogWrite(roleLogHandlers.onRoleCreate(role));
+  });
+  client.on(Events.GuildRoleDelete, (role) => {
+    trackLogWrite(roleLogHandlers.onRoleDelete(role));
+  });
+  client.on(Events.GuildRoleUpdate, (oldRole, newRole) => {
+    trackLogWrite(roleLogHandlers.onRoleUpdate(oldRole, newRole));
+  });
+
+  client.on(Events.ChannelCreate, (channel) => {
+    trackLogWrite(channelLogHandlers.onChannelCreate(channel));
+  });
+  client.on(Events.ChannelDelete, (channel) => {
+    trackLogWrite(channelLogHandlers.onChannelDelete(channel));
+  });
+  client.on(Events.ChannelUpdate, (oldChannel, newChannel) => {
+    trackLogWrite(channelLogHandlers.onChannelUpdate(oldChannel, newChannel));
+  });
+
+  client.on(Events.GuildUpdate, (oldGuild, newGuild) => {
+    trackLogWrite(guildLogHandlers.onGuildUpdate(oldGuild, newGuild));
   });
 
   client.once(Events.ClientReady, (readyClient) => {
