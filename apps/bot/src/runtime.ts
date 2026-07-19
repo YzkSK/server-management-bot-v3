@@ -3,10 +3,14 @@ import { createDiscordClient } from "@sm-bot/core";
 import { createDbConnection, ensureEveryoneBaselineGrant, insertLogEvent } from "@sm-bot/db";
 import {
   createChannelLogHandlers,
+  createEmojiStickerLogHandlers,
   createGuildLogHandlers,
+  createInviteCache,
+  createInviteLogHandlers,
   createMemberLogHandlers,
   createMessageLogHandlers,
   createRoleLogHandlers,
+  createThreadLogHandlers,
   writeLogEvent,
   type RedisStreamWriter
 } from "@sm-bot/logging";
@@ -46,20 +50,17 @@ export async function startBot(): Promise<void> {
       // 有効化しないと、guildMemberAdd/Remove/Updateが発火しない。
       GatewayIntentBits.GuildMembers,
       // guildBanAdd/guildBanRemoveの受信に必要。
-      GatewayIntentBits.GuildModeration
+      GatewayIntentBits.GuildModeration,
+      // invite.create/deleteの受信に必要。
+      GatewayIntentBits.GuildInvites,
+      // emoji.*/sticker.*の受信に必要。
+      GatewayIntentBits.GuildEmojisAndStickers,
+      // webhook.updateの受信に必要。
+      GatewayIntentBits.GuildWebhooks
     ],
     // キャッシュされていないメッセージのupdate/deleteイベントを受け取るためにpartialを有効化する。
     // 有効化しないと、discord.jsはそれらのイベントを部分データとしてすら発火しない。
     partials: [Partials.Message, Partials.Channel]
-  });
-
-  client.on(Events.GuildCreate, (guild) => {
-    void handleGuildCreate(
-      { guildId: guild.id, everyoneRoleId: guild.roles.everyone.id },
-      { db, ensureEveryoneBaselineGrant }
-    ).catch((err: unknown) => {
-      console.error("guild-join: failed to seed baseline grant", { guildId: guild.id, err });
-    });
   });
 
   const messageLogHandlers = createMessageLogHandlers({
@@ -81,6 +82,30 @@ export async function startBot(): Promise<void> {
   const guildLogHandlers = createGuildLogHandlers({
     writeLogEvent: (event) =>
       writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const threadLogHandlers = createThreadLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const inviteCache = createInviteCache();
+  const inviteLogHandlers = createInviteLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event),
+    inviteCache
+  });
+  const emojiStickerLogHandlers = createEmojiStickerLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+
+  client.on(Events.GuildCreate, (guild) => {
+    void handleGuildCreate(
+      { guildId: guild.id, everyoneRoleId: guild.roles.everyone.id },
+      { db, ensureEveryoneBaselineGrant }
+    ).catch((err: unknown) => {
+      console.error("guild-join: failed to seed baseline grant", { guildId: guild.id, err });
+    });
+    inviteLogHandlers.onGuildCreate(guild);
   });
 
   // shutdown時にDB/Redis接続を閉じる前に、処理中のログ書き込みを待機するための追跡集合。
@@ -146,8 +171,49 @@ export async function startBot(): Promise<void> {
     trackLogWrite(guildLogHandlers.onGuildUpdate(oldGuild, newGuild));
   });
 
+  client.on(Events.ThreadCreate, (thread, newlyCreated) => {
+    trackLogWrite(threadLogHandlers.onThreadCreate(thread, newlyCreated));
+  });
+  client.on(Events.ThreadUpdate, (oldThread, newThread) => {
+    trackLogWrite(threadLogHandlers.onThreadUpdate(oldThread, newThread));
+  });
+  client.on(Events.ThreadDelete, (thread) => {
+    trackLogWrite(threadLogHandlers.onThreadDelete(thread));
+  });
+
+  client.on(Events.InviteCreate, (invite) => {
+    trackLogWrite(inviteLogHandlers.onInviteCreate(invite));
+  });
+  client.on(Events.InviteDelete, (invite) => {
+    trackLogWrite(inviteLogHandlers.onInviteDelete(invite));
+  });
+
+  client.on(Events.GuildEmojiCreate, (emoji) => {
+    trackLogWrite(emojiStickerLogHandlers.onEmojiCreate(emoji));
+  });
+  client.on(Events.GuildEmojiDelete, (emoji) => {
+    trackLogWrite(emojiStickerLogHandlers.onEmojiDelete(emoji));
+  });
+  client.on(Events.GuildEmojiUpdate, (oldEmoji, newEmoji) => {
+    trackLogWrite(emojiStickerLogHandlers.onEmojiUpdate(oldEmoji, newEmoji));
+  });
+  client.on(Events.GuildStickerCreate, (sticker) => {
+    trackLogWrite(emojiStickerLogHandlers.onStickerCreate(sticker));
+  });
+  client.on(Events.GuildStickerDelete, (sticker) => {
+    trackLogWrite(emojiStickerLogHandlers.onStickerDelete(sticker));
+  });
+  client.on(Events.GuildStickerUpdate, (oldSticker, newSticker) => {
+    trackLogWrite(emojiStickerLogHandlers.onStickerUpdate(oldSticker, newSticker));
+  });
+
+  client.on(Events.WebhooksUpdate, (channel) => {
+    trackLogWrite(channelLogHandlers.onWebhooksUpdate(channel));
+  });
+
   client.once(Events.ClientReady, (readyClient) => {
     console.log(`bot started as ${readyClient.user.tag}`);
+    inviteLogHandlers.onClientReady(readyClient.guilds.cache.values());
   });
 
   let isShuttingDown = false;
