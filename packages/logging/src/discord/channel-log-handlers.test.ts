@@ -196,4 +196,26 @@ describe("createChannelLogHandlers", () => {
       consoleError.mock.restore();
     }
   });
+
+  it("writes webhook.update on onWebhooksUpdate", async () => {
+    const writeLogEvent = fakeWriteLogEvent();
+    const handlers = createChannelLogHandlers({ writeLogEvent });
+
+    await handlers.onWebhooksUpdate(fakeChannel());
+
+    assert.equal(writeLogEvent.mock.calls.length, 1);
+    assert.equal(writeLogEvent.mock.calls[0]?.arguments[0].eventName, "webhook.update");
+  });
+
+  it("correlates webhook.update with a matching audit log entry", async () => {
+    const writeLogEvent = fakeWriteLogEvent();
+    const handlers = createChannelLogHandlers({ writeLogEvent });
+    const guild = grantedGuild(async () => ({
+      entries: new Collection([["entry-1", auditLogEntry({ action: AuditLogEvent.WebhookUpdate })]])
+    }));
+
+    await handlers.onWebhooksUpdate(fakeChannel({ guild }));
+
+    assert.equal(writeLogEvent.mock.calls[0]?.arguments[0].actorId, "actor-1");
+  });
 });

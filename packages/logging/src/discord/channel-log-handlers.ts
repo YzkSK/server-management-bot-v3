@@ -5,7 +5,8 @@ import {
   isGuildChannel,
   normalizeChannelCreate,
   normalizeChannelDelete,
-  normalizeChannelUpdate
+  normalizeChannelUpdate,
+  normalizeWebhookUpdate
 } from "./channel-events.js";
 import { correlateWithAuditLog } from "./audit-log.js";
 
@@ -20,6 +21,7 @@ export interface ChannelLogHandlers {
     oldChannel: DMChannel | NonThreadGuildBasedChannel,
     newChannel: DMChannel | NonThreadGuildBasedChannel
   ) => Promise<void>;
+  onWebhooksUpdate: (channel: NonThreadGuildBasedChannel) => Promise<void>;
 }
 
 export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLogHandlers {
@@ -68,6 +70,17 @@ export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLo
           await writeSafely(deps, event);
         }
       }
+    },
+
+    async onWebhooksUpdate(channel) {
+      const event = normalizeWebhookUpdate(channel);
+      const correlated = await correlateWithAuditLog(
+        event,
+        channel.guild,
+        AuditLogEvent.WebhookUpdate,
+        channel.id
+      );
+      await writeSafely(deps, correlated);
     }
   };
 }

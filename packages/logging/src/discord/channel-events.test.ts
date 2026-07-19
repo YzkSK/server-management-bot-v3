@@ -5,7 +5,8 @@ import {
   isGuildChannel,
   normalizeChannelCreate,
   normalizeChannelDelete,
-  normalizeChannelUpdate
+  normalizeChannelUpdate,
+  normalizeWebhookUpdate
 } from "./channel-events.js";
 
 function fakeChannel(overrides: Record<string, unknown> = {}) {
@@ -106,5 +107,16 @@ describe("normalizeChannelUpdate", () => {
       events.map((event) => event.eventName).sort(),
       ["channel.permission_update", "channel.update"]
     );
+  });
+});
+
+describe("normalizeWebhookUpdate", () => {
+  it("normalizes a webhook update with no known actor", () => {
+    const event = normalizeWebhookUpdate(fakeChannel());
+
+    assert.equal(event.eventName, "webhook.update");
+    assert.equal(event.guildId, "guild-1");
+    assert.equal(event.channelId, "channel-1");
+    assert.equal(event.actorId, null);
   });
 });
