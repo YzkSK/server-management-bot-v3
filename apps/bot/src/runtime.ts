@@ -2,14 +2,19 @@ import { parseBotEnv } from "@sm-bot/config";
 import { createDiscordClient } from "@sm-bot/core";
 import { createDbConnection, ensureEveryoneBaselineGrant, insertLogEvent } from "@sm-bot/db";
 import {
+  createAutoModLogHandlers,
   createChannelLogHandlers,
   createEmojiStickerLogHandlers,
   createGuildLogHandlers,
+  createIntegrationLogHandlers,
   createInviteCache,
   createInviteLogHandlers,
   createMemberLogHandlers,
   createMessageLogHandlers,
+  createPollLogHandlers,
   createRoleLogHandlers,
+  createScheduledEventLogHandlers,
+  createStageLogHandlers,
   createThreadLogHandlers,
   writeLogEvent,
   type RedisStreamWriter
@@ -56,7 +61,17 @@ export async function startBot(): Promise<void> {
       // emoji.*/sticker.*の受信に必要。
       GatewayIntentBits.GuildEmojisAndStickers,
       // webhook.updateの受信に必要。
-      GatewayIntentBits.GuildWebhooks
+      GatewayIntentBits.GuildWebhooks,
+      // automod.rule.*の受信に必要。
+      GatewayIntentBits.AutoModerationConfiguration,
+      // automod.actionの受信に必要。
+      GatewayIntentBits.AutoModerationExecution,
+      // integration.updateの受信に必要。
+      GatewayIntentBits.GuildIntegrations,
+      // message.poll.vote/unvoteの受信に必要。
+      GatewayIntentBits.GuildMessagePolls,
+      // event.*の受信に必要。
+      GatewayIntentBits.GuildScheduledEvents
     ],
     // キャッシュされていないメッセージのupdate/deleteイベントを受け取るためにpartialを有効化する。
     // 有効化しないと、discord.jsはそれらのイベントを部分データとしてすら発火しない。
@@ -94,6 +109,26 @@ export async function startBot(): Promise<void> {
     inviteCache
   });
   const emojiStickerLogHandlers = createEmojiStickerLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const autoModLogHandlers = createAutoModLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const integrationLogHandlers = createIntegrationLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const pollLogHandlers = createPollLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const scheduledEventLogHandlers = createScheduledEventLogHandlers({
+    writeLogEvent: (event) =>
+      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
+  });
+  const stageLogHandlers = createStageLogHandlers({
     writeLogEvent: (event) =>
       writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent }, event)
   });
@@ -209,6 +244,56 @@ export async function startBot(): Promise<void> {
 
   client.on(Events.WebhooksUpdate, (channel) => {
     trackLogWrite(channelLogHandlers.onWebhooksUpdate(channel));
+  });
+
+  client.on(Events.AutoModerationRuleCreate, (rule) => {
+    trackLogWrite(autoModLogHandlers.onRuleCreate(rule));
+  });
+  client.on(Events.AutoModerationRuleUpdate, (oldRule, newRule) => {
+    trackLogWrite(autoModLogHandlers.onRuleUpdate(oldRule, newRule));
+  });
+  client.on(Events.AutoModerationRuleDelete, (rule) => {
+    trackLogWrite(autoModLogHandlers.onRuleDelete(rule));
+  });
+  client.on(Events.AutoModerationActionExecution, (execution) => {
+    trackLogWrite(autoModLogHandlers.onActionExecution(execution));
+  });
+
+  client.on(Events.GuildIntegrationsUpdate, (guild) => {
+    trackLogWrite(integrationLogHandlers.onIntegrationsUpdate(guild));
+  });
+
+  client.on(Events.MessagePollVoteAdd, (answer, userId) => {
+    trackLogWrite(pollLogHandlers.onPollVoteAdd(answer, userId));
+  });
+  client.on(Events.MessagePollVoteRemove, (answer, userId) => {
+    trackLogWrite(pollLogHandlers.onPollVoteRemove(answer, userId));
+  });
+
+  client.on(Events.GuildScheduledEventCreate, (event) => {
+    trackLogWrite(scheduledEventLogHandlers.onScheduledEventCreate(event));
+  });
+  client.on(Events.GuildScheduledEventUpdate, (oldEvent, newEvent) => {
+    trackLogWrite(scheduledEventLogHandlers.onScheduledEventUpdate(oldEvent, newEvent));
+  });
+  client.on(Events.GuildScheduledEventDelete, (event) => {
+    trackLogWrite(scheduledEventLogHandlers.onScheduledEventDelete(event));
+  });
+  client.on(Events.GuildScheduledEventUserAdd, (event, user) => {
+    trackLogWrite(scheduledEventLogHandlers.onScheduledEventUserAdd(event, user));
+  });
+  client.on(Events.GuildScheduledEventUserRemove, (event, user) => {
+    trackLogWrite(scheduledEventLogHandlers.onScheduledEventUserRemove(event, user));
+  });
+
+  client.on(Events.StageInstanceCreate, (stage) => {
+    trackLogWrite(stageLogHandlers.onStageCreate(stage));
+  });
+  client.on(Events.StageInstanceUpdate, (oldStage, newStage) => {
+    trackLogWrite(stageLogHandlers.onStageUpdate(oldStage, newStage));
+  });
+  client.on(Events.StageInstanceDelete, (stage) => {
+    trackLogWrite(stageLogHandlers.onStageDelete(stage));
   });
 
   client.once(Events.ClientReady, (readyClient) => {
