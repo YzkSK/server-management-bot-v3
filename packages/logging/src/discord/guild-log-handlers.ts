@@ -1,7 +1,8 @@
 import type { NormalizedEvent } from "@sm-bot/shared";
-import type { Guild } from "discord.js";
+import { AuditLogEvent, type Guild } from "discord.js";
 
 import { normalizeGuildUpdate } from "./guild-events.js";
+import { correlateWithAuditLog } from "./audit-log.js";
 
 export interface GuildLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -18,7 +19,13 @@ export function createGuildLogHandlers(deps: GuildLogHandlerDeps): GuildLogHandl
       if (!event) {
         return;
       }
-      await writeSafely(deps, event);
+      const correlated = await correlateWithAuditLog(
+        event,
+        newGuild,
+        AuditLogEvent.GuildUpdate,
+        newGuild.id
+      );
+      await writeSafely(deps, correlated);
     }
   };
 }

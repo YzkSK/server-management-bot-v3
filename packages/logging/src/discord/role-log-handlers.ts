@@ -1,11 +1,12 @@
 import type { NormalizedEvent } from "@sm-bot/shared";
-import type { Role } from "discord.js";
+import { AuditLogEvent, type Role } from "discord.js";
 
 import {
   normalizeRoleCreate,
   normalizeRoleDelete,
   normalizeRoleUpdate
 } from "./role-events.js";
+import { correlateWithAuditLog } from "./audit-log.js";
 
 export interface RoleLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -20,11 +21,25 @@ export interface RoleLogHandlers {
 export function createRoleLogHandlers(deps: RoleLogHandlerDeps): RoleLogHandlers {
   return {
     async onRoleCreate(role) {
-      await writeSafely(deps, normalizeRoleCreate(role));
+      const event = normalizeRoleCreate(role);
+      const correlated = await correlateWithAuditLog(
+        event,
+        role.guild,
+        AuditLogEvent.RoleCreate,
+        role.id
+      );
+      await writeSafely(deps, correlated);
     },
 
     async onRoleDelete(role) {
-      await writeSafely(deps, normalizeRoleDelete(role));
+      const event = normalizeRoleDelete(role);
+      const correlated = await correlateWithAuditLog(
+        event,
+        role.guild,
+        AuditLogEvent.RoleDelete,
+        role.id
+      );
+      await writeSafely(deps, correlated);
     },
 
     async onRoleUpdate(oldRole, newRole) {
@@ -32,7 +47,13 @@ export function createRoleLogHandlers(deps: RoleLogHandlerDeps): RoleLogHandlers
       if (!event) {
         return;
       }
-      await writeSafely(deps, event);
+      const correlated = await correlateWithAuditLog(
+        event,
+        newRole.guild,
+        AuditLogEvent.RoleUpdate,
+        newRole.id
+      );
+      await writeSafely(deps, correlated);
     }
   };
 }

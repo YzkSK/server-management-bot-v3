@@ -135,6 +135,19 @@ export function applyAuditLog(
   };
 }
 
+/** イベントのeventTimestampを基準時刻としてAudit Logと相関させ、actorId/payload.auditLogを補完する。 */
+export async function correlateWithAuditLog(
+  event: NormalizedEvent,
+  guild: Guild | null,
+  action: AuditLogEvent,
+  targetId: string
+): Promise<NormalizedEvent> {
+  const auditLog = await lookupAuditLog(guild, action, targetId, {
+    referenceTime: event.eventTimestamp
+  });
+  return applyAuditLog(event, auditLog);
+}
+
 function findClosestMatchingAuditLogEntry(
   entries: Iterable<GuildAuditLogsEntry>,
   action: AuditLogEvent,
