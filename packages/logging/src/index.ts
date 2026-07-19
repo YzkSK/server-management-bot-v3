@@ -1,5 +1,7 @@
 export * from "./application/log-stream.js";
 export * from "./application/log-writer.js";
+export * from "./discord/channel-events.js";
+export * from "./discord/channel-log-handlers.js";
 export * from "./discord/member-events.js";
 export * from "./discord/member-log-handlers.js";
 export * from "./discord/message-events.js";
