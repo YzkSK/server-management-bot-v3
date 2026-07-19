@@ -9,4 +9,6 @@ export * from "./discord/message-log-handlers.js";
 export * from "./discord/payloads.js";
 export * from "./discord/role-events.js";
 export * from "./discord/role-log-handlers.js";
+export * from "./discord/guild-events.js";
+export * from "./discord/guild-log-handlers.js";
 export * from "./domain/realtime-policy.js";
