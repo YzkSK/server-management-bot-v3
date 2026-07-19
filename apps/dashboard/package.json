@@ -14,6 +14,7 @@
   "dependencies": {
     "@sm-bot/config": "workspace:*",
     "@sm-bot/dashboard-access": "workspace:*",
+    "@sm-bot/db": "workspace:*",
     "@sm-bot/shared": "workspace:*",
     "@tanstack/react-query": "^5.80.3",
     "@trpc/client": "^11.0.0",
@@ -23,6 +24,7 @@
     "next-auth": "^4.24.14",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "redis": "^4.7.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
