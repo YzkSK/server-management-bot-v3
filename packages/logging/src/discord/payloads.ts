@@ -1,10 +1,14 @@
 import type {
+  AnyThreadChannel,
   Guild,
+  GuildEmoji,
   GuildMember,
+  Invite,
   NonThreadGuildBasedChannel,
   PartialGuildMember,
   PartialUser,
   Role,
+  Sticker,
   User
 } from "discord.js";
 
@@ -92,5 +96,64 @@ export function channelPayload(channel: NonThreadGuildBasedChannel) {
     rateLimitPerUser:
       "rateLimitPerUser" in channel ? (channel.rateLimitPerUser as number | null) : null,
     permissionOverwrites: channelPermissionOverwritesPayload(channel)
+  };
+}
+
+export function threadPayload(thread: AnyThreadChannel) {
+  return {
+    id: thread.id,
+    guildId: thread.guildId,
+    name: thread.name,
+    type: thread.type,
+    parentId: thread.parentId,
+    ownerId: thread.ownerId,
+    archived: thread.archived,
+    locked: thread.locked,
+    invitable: thread.invitable ?? null,
+    autoArchiveDuration: thread.autoArchiveDuration,
+    rateLimitPerUser: thread.rateLimitPerUser
+  };
+}
+
+interface CachedInviteLike {
+  maxAge: number | null;
+  maxUses: number | null;
+  temporary: boolean | null;
+  uses: number | null;
+}
+
+export function invitePayload(invite: Invite, cached?: CachedInviteLike | null) {
+  return {
+    code: invite.code,
+    url: invite.url,
+    maxAge: invite.maxAge ?? cached?.maxAge ?? null,
+    maxUses: invite.maxUses ?? cached?.maxUses ?? null,
+    temporary: invite.temporary ?? cached?.temporary ?? null,
+    uses: invite.uses ?? cached?.uses ?? null
+  };
+}
+
+export function emojiPayload(emoji: GuildEmoji) {
+  return {
+    id: emoji.id,
+    name: emoji.name,
+    animated: emoji.animated,
+    managed: emoji.managed,
+    available: emoji.available,
+    roles: [...emoji.roles.cache.keys()].sort()
+  };
+}
+
+export function stickerPayload(sticker: Sticker) {
+  return {
+    id: sticker.id,
+    guildId: sticker.guildId,
+    name: sticker.name,
+    description: sticker.description,
+    type: sticker.type,
+    format: sticker.format,
+    available: sticker.available,
+    tags: sticker.tags,
+    user: sticker.user ? userPayload(sticker.user) : null
   };
 }

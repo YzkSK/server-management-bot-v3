@@ -6,9 +6,13 @@ import {
   channelPayload,
   channelPermissionOverwritesPayload,
   diffRecord,
+  emojiPayload,
   guildPayload,
+  invitePayload,
   memberPayload,
   rolePayload,
+  stickerPayload,
+  threadPayload,
   userPayload
 } from "./payloads.js";
 
@@ -188,5 +192,152 @@ describe("channelPayload", () => {
     const payload = channelPayload(withoutRateLimit as any);
 
     assert.equal(payload.rateLimitPerUser, null);
+  });
+});
+
+function fakeThread(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "thread-1",
+    guildId: "guild-1",
+    name: "help-desk",
+    type: 11,
+    parentId: "channel-1",
+    ownerId: "member-1",
+    archived: false,
+    locked: false,
+    invitable: true,
+    autoArchiveDuration: 1440,
+    rateLimitPerUser: 0,
+    ...overrides
+  } as never;
+}
+
+describe("threadPayload", () => {
+  it("extracts the tracked thread fields", () => {
+    assert.deepEqual(threadPayload(fakeThread()), {
+      id: "thread-1",
+      guildId: "guild-1",
+      name: "help-desk",
+      type: 11,
+      parentId: "channel-1",
+      ownerId: "member-1",
+      archived: false,
+      locked: false,
+      invitable: true,
+      autoArchiveDuration: 1440,
+      rateLimitPerUser: 0
+    });
+  });
+});
+
+describe("invitePayload", () => {
+  it("extracts invite fields directly when present", () => {
+    const invite = {
+      code: "abc123",
+      url: "https://discord.gg/abc123",
+      maxAge: 86400,
+      maxUses: 10,
+      temporary: false,
+      uses: 3
+    } as never;
+
+    assert.deepEqual(invitePayload(invite), {
+      code: "abc123",
+      url: "https://discord.gg/abc123",
+      maxAge: 86400,
+      maxUses: 10,
+      temporary: false,
+      uses: 3
+    });
+  });
+
+  it("falls back to cached values when the invite fields are null", () => {
+    const invite = {
+      code: "abc123",
+      url: "https://discord.gg/abc123",
+      maxAge: null,
+      maxUses: null,
+      temporary: null,
+      uses: null
+    } as never;
+    const cached = {
+      code: "abc123",
+      url: "https://discord.gg/abc123",
+      maxAge: 3600,
+      maxUses: 1,
+      temporary: true,
+      uses: 1,
+      inviterId: "member-1"
+    };
+
+    assert.deepEqual(invitePayload(invite, cached), {
+      code: "abc123",
+      url: "https://discord.gg/abc123",
+      maxAge: 3600,
+      maxUses: 1,
+      temporary: true,
+      uses: 1
+    });
+  });
+});
+
+function fakeEmoji(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "emoji-1",
+    name: "pepe",
+    animated: false,
+    managed: false,
+    available: true,
+    roles: { cache: new Map([["role-2", {}], ["role-1", {}]]) },
+    ...overrides
+  } as never;
+}
+
+describe("emojiPayload", () => {
+  it("extracts the tracked emoji fields with sorted role ids", () => {
+    assert.deepEqual(emojiPayload(fakeEmoji()), {
+      id: "emoji-1",
+      name: "pepe",
+      animated: false,
+      managed: false,
+      available: true,
+      roles: ["role-1", "role-2"]
+    });
+  });
+});
+
+function fakeSticker(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "sticker-1",
+    guildId: "guild-1",
+    name: "wave",
+    description: "a waving hand",
+    type: 1,
+    format: 1,
+    available: true,
+    tags: "wave,hello",
+    user: { id: "member-1", username: "member1", globalName: null, bot: false },
+    ...overrides
+  } as never;
+}
+
+describe("stickerPayload", () => {
+  it("extracts the tracked sticker fields including nested user payload", () => {
+    assert.deepEqual(stickerPayload(fakeSticker()), {
+      id: "sticker-1",
+      guildId: "guild-1",
+      name: "wave",
+      description: "a waving hand",
+      type: 1,
+      format: 1,
+      available: true,
+      tags: "wave,hello",
+      user: { id: "member-1", username: "member1", globalName: null, bot: false }
+    });
+  });
+
+  it("returns null user when the sticker has no uploader", () => {
+    const payload = stickerPayload(fakeSticker({ user: null }));
+    assert.equal(payload.user, null);
   });
 });
