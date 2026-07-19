@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { normalizeMemberJoin, normalizeMemberLeave, normalizeMemberUpdate } from "./member-events.js";
+import {
+  normalizeMemberBan,
+  normalizeMemberJoin,
+  normalizeMemberLeave,
+  normalizeMemberUnban,
+  normalizeMemberUpdate
+} from "./member-events.js";
 
 function fakeMember(overrides: Record<string, unknown> = {}) {
   return {
@@ -83,5 +89,92 @@ describe("normalizeMemberUpdate", () => {
     );
 
     assert.equal(event, null);
+  });
+
+  it("uses member.timeout when communicationDisabledUntil changed", () => {
+    const event = normalizeMemberUpdate(
+      fakeMember({ communicationDisabledUntil: null }),
+      fakeMember({ communicationDisabledUntil: new Date("2026-01-01T00:00:00.000Z") })
+    );
+
+    assert.ok(event);
+    assert.equal(event?.eventName, "member.timeout");
+    assert.deepEqual(event?.payload.changes, {
+      communicationDisabledUntil: {
+        before: null,
+        after: "2026-01-01T00:00:00.000Z"
+      }
+    });
+  });
+
+  it("keeps member.update when communicationDisabledUntil is unchanged but other fields changed", () => {
+    const event = normalizeMemberUpdate(
+      fakeMember({ nickname: null }),
+      fakeMember({ nickname: "New Nick" })
+    );
+
+    assert.ok(event);
+    assert.equal(event?.eventName, "member.update");
+  });
+
+  it("uses member.timeout when timeout and nickname change together, keeping both diffs in the payload", () => {
+    const event = normalizeMemberUpdate(
+      fakeMember({ nickname: null, communicationDisabledUntil: null }),
+      fakeMember({
+        nickname: "New Nick",
+        communicationDisabledUntil: new Date("2026-01-01T00:00:00.000Z")
+      })
+    );
+
+    assert.ok(event);
+    assert.equal(event?.eventName, "member.timeout");
+    assert.deepEqual(event?.payload.changes, {
+      nickname: { before: null, after: "New Nick" },
+      communicationDisabledUntil: {
+        before: null,
+        after: "2026-01-01T00:00:00.000Z"
+      }
+    });
+  });
+
+  it("does not misclassify as member.timeout when oldMember is partial and communicationDisabledUntil is already absent on both sides", () => {
+    const event = normalizeMemberUpdate(
+      fakeMember({ nickname: null, communicationDisabledUntil: undefined }),
+      fakeMember({ nickname: "New Nick", communicationDisabledUntil: null })
+    );
+
+    assert.ok(event);
+    assert.equal(event?.eventName, "member.update");
+  });
+});
+
+function fakeBan(overrides: Record<string, unknown> = {}) {
+  return {
+    guild: { id: "guild-1" },
+    user: { id: "user-1", username: "user1", globalName: null, bot: false },
+    reason: null,
+    ...overrides
+  } as never;
+}
+
+describe("normalizeMemberBan", () => {
+  it("normalizes a member ban with actorId set to the banned user", () => {
+    const event = normalizeMemberBan(fakeBan({ reason: "spam" }));
+
+    assert.equal(event.eventName, "member.ban");
+    assert.equal(event.guildId, "guild-1");
+    assert.equal(event.actorId, "user-1");
+    assert.equal(event.payload.reason, "spam");
+    assert.deepEqual((event.payload.user as { id: string }).id, "user-1");
+  });
+});
+
+describe("normalizeMemberUnban", () => {
+  it("normalizes a member unban with actorId set to the unbanned user", () => {
+    const event = normalizeMemberUnban(fakeBan());
+
+    assert.equal(event.eventName, "member.unban");
+    assert.equal(event.guildId, "guild-1");
+    assert.equal(event.actorId, "user-1");
   });
 });

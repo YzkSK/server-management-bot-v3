@@ -1,7 +1,7 @@
 import type { NormalizedEvent } from "@sm-bot/shared";
-import type { GuildMember, PartialGuildMember } from "discord.js";
+import type { GuildBan, GuildMember, PartialGuildMember } from "discord.js";
 
-import { diffRecord, memberPayload } from "./payloads.js";
+import { diffRecord, memberPayload, userPayload } from "./payloads.js";
 
 export function normalizeMemberJoin(member: GuildMember): NormalizedEvent {
   const now = new Date();
@@ -49,9 +49,13 @@ export function normalizeMemberUpdate(
     return null;
   }
 
+  const oldTimeout = oldMember.communicationDisabledUntil?.toISOString() ?? null;
+  const newTimeout = newMember.communicationDisabledUntil?.toISOString() ?? null;
+  const eventName = oldTimeout !== newTimeout ? "member.timeout" : "member.update";
+
   const now = new Date();
   return {
-    eventName: "member.update",
+    eventName,
     eventTimestamp: now,
     receivedAt: now,
     guildId: newMember.guild.id,
@@ -59,5 +63,39 @@ export function normalizeMemberUpdate(
     channelId: null,
     messageId: null,
     payload: { before, after, changes }
+  };
+}
+
+export function normalizeMemberBan(ban: GuildBan): NormalizedEvent {
+  const now = new Date();
+  return {
+    eventName: "member.ban",
+    eventTimestamp: now,
+    receivedAt: now,
+    guildId: ban.guild.id,
+    actorId: ban.user.id,
+    channelId: null,
+    messageId: null,
+    payload: {
+      user: userPayload(ban.user),
+      reason: ban.reason
+    }
+  };
+}
+
+export function normalizeMemberUnban(ban: GuildBan): NormalizedEvent {
+  const now = new Date();
+  return {
+    eventName: "member.unban",
+    eventTimestamp: now,
+    receivedAt: now,
+    guildId: ban.guild.id,
+    actorId: ban.user.id,
+    channelId: null,
+    messageId: null,
+    payload: {
+      user: userPayload(ban.user),
+      reason: ban.reason
+    }
   };
 }
