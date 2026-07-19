@@ -31,8 +31,10 @@ jobs:
     env:
       DISCORD_CLIENT_ID: build-placeholder
       DISCORD_CLIENT_SECRET: build-placeholder
+      DISCORD_BOT_TOKEN: build-placeholder
       NEXTAUTH_SECRET: build-placeholder
       DATABASE_URL: postgres://sm_bot:sm_bot@localhost:5432/sm_bot
+      REDIS_URL: redis://localhost:6379
     steps:
       - name: Checkout
         uses: actions/checkout@v5
