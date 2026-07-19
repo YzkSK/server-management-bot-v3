@@ -31,10 +31,12 @@ export const dashboardAuthEnvSchema = appEnvSchema
   .pick({
     DISCORD_CLIENT_ID: true,
     DISCORD_CLIENT_SECRET: true,
-    NEXTAUTH_SECRET: true
+    NEXTAUTH_SECRET: true,
+    DISCORD_BOT_TOKEN: true,
+    DATABASE_URL: true,
+    REDIS_URL: true
   })
   .extend({
-    DISCORD_BOT_TOKEN: z.string().optional(),
     NEXTAUTH_URL: z.string().url().optional()
   });
 
