@@ -74,7 +74,7 @@ export function createMemberLogHandlers(deps: MemberLogHandlerDeps): MemberLogHa
         pendingRemovals.delete(key);
         resolve(false);
       }, BAN_ARRIVAL_GRACE_MS);
-      timer.unref?.();
+      // このタイマーの発火をawait側が待っているため、unrefしない(cleanup用のrecentBansタイマーとは異なる)。
       pendingRemovals.set(key, () => {
         clearTimeout(timer);
         resolve(true);
