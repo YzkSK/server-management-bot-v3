@@ -44,7 +44,9 @@ export async function startBot(): Promise<void> {
       GatewayIntentBits.MessageContent,
       // privileged intent: Discord Developer PortalでServer Members Intentを
       // 有効化しないと、guildMemberAdd/Remove/Updateが発火しない。
-      GatewayIntentBits.GuildMembers
+      GatewayIntentBits.GuildMembers,
+      // guildBanAdd/guildBanRemoveの受信に必要。
+      GatewayIntentBits.GuildModeration
     ],
     // キャッシュされていないメッセージのupdate/deleteイベントを受け取るためにpartialを有効化する。
     // 有効化しないと、discord.jsはそれらのイベントを部分データとしてすら発火しない。
@@ -112,6 +114,12 @@ export async function startBot(): Promise<void> {
   });
   client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
     trackLogWrite(memberLogHandlers.onGuildMemberUpdate(oldMember, newMember));
+  });
+  client.on(Events.GuildBanAdd, (ban) => {
+    trackLogWrite(memberLogHandlers.onGuildBanAdd(ban));
+  });
+  client.on(Events.GuildBanRemove, (ban) => {
+    trackLogWrite(memberLogHandlers.onGuildBanRemove(ban));
   });
 
   client.on(Events.GuildRoleCreate, (role) => {

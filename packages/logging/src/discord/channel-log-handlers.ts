@@ -1,5 +1,5 @@
 import type { NormalizedEvent } from "@sm-bot/shared";
-import type { DMChannel, NonThreadGuildBasedChannel } from "discord.js";
+import { AuditLogEvent, type DMChannel, type NonThreadGuildBasedChannel } from "discord.js";
 
 import {
   isGuildChannel,
@@ -7,6 +7,7 @@ import {
   normalizeChannelDelete,
   normalizeChannelUpdate
 } from "./channel-events.js";
+import { correlateWithAuditLog } from "./audit-log.js";
 
 export interface ChannelLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -24,14 +25,28 @@ export interface ChannelLogHandlers {
 export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLogHandlers {
   return {
     async onChannelCreate(channel) {
-      await writeSafely(deps, normalizeChannelCreate(channel));
+      const event = normalizeChannelCreate(channel);
+      const correlated = await correlateWithAuditLog(
+        event,
+        channel.guild,
+        AuditLogEvent.ChannelCreate,
+        channel.id
+      );
+      await writeSafely(deps, correlated);
     },
 
     async onChannelDelete(channel) {
       if (!isGuildChannel(channel)) {
         return;
       }
-      await writeSafely(deps, normalizeChannelDelete(channel));
+      const event = normalizeChannelDelete(channel);
+      const correlated = await correlateWithAuditLog(
+        event,
+        channel.guild,
+        AuditLogEvent.ChannelDelete,
+        channel.id
+      );
+      await writeSafely(deps, correlated);
     },
 
     async onChannelUpdate(oldChannel, newChannel) {
@@ -40,7 +55,18 @@ export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLo
       }
       const events = normalizeChannelUpdate(oldChannel, newChannel);
       for (const event of events) {
-        await writeSafely(deps, event);
+        // channel.permission_updateはAudit Log相関の対象外(actorId: nullのまま)。
+        if (event.eventName === "channel.update") {
+          const correlated = await correlateWithAuditLog(
+            event,
+            newChannel.guild,
+            AuditLogEvent.ChannelUpdate,
+            newChannel.id
+          );
+          await writeSafely(deps, correlated);
+        } else {
+          await writeSafely(deps, event);
+        }
       }
     }
   };

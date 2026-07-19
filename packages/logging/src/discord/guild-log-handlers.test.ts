@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
 
 import type { NormalizedEvent } from "@sm-bot/shared";
+import { AuditLogEvent, Collection, PermissionsBitField } from "discord.js";
 
 import { createGuildLogHandlers } from "./guild-log-handlers.js";
 
@@ -14,6 +15,7 @@ function fakeGuild(overrides: Record<string, unknown> = {}) {
     preferredLocale: "ja",
     verificationLevel: 1,
     premiumTier: 0,
+    members: { me: { permissions: new PermissionsBitField() } },
     ...overrides
   } as never;
 }
@@ -31,6 +33,43 @@ describe("createGuildLogHandlers", () => {
 
     assert.equal(writeLogEvent.mock.calls.length, 1);
     assert.equal(writeLogEvent.mock.calls[0]?.arguments[0].eventName, "guild.update");
+  });
+
+  it("correlates guild.update with a matching audit log entry", async () => {
+    const writeLogEvent = fakeWriteLogEvent();
+    const handlers = createGuildLogHandlers({ writeLogEvent });
+    const members = {
+      me: { permissions: new PermissionsBitField(PermissionsBitField.Flags.ViewAuditLog) }
+    };
+    const fetchAuditLogs = async () => ({
+      entries: new Collection([
+        [
+          "entry-1",
+          {
+            id: "entry-1",
+            action: AuditLogEvent.GuildUpdate,
+            targetId: "guild-1",
+            target: null,
+            executorId: "actor-1",
+            executor: null,
+            reason: null,
+            createdTimestamp: Date.now(),
+            get createdAt() {
+              return new Date(this.createdTimestamp);
+            }
+          }
+        ]
+      ])
+    });
+
+    await handlers.onGuildUpdate(
+      fakeGuild({ name: "Old", members, fetchAuditLogs }),
+      fakeGuild({ name: "New", members, fetchAuditLogs })
+    );
+
+    assert.equal(writeLogEvent.mock.calls.length, 1);
+    const event = writeLogEvent.mock.calls[0]?.arguments[0];
+    assert.equal(event?.actorId, "actor-1");
   });
 
   it("skips guild.update when nothing tracked changed", async () => {
