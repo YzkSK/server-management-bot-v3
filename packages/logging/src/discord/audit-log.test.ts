@@ -66,6 +66,74 @@ describe("lookupAuditLog", () => {
     assert.equal(result.actorId, "actor-1");
   });
 
+  it("returns matched when only entry.target.id matches (targetId fallback)", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          ["entry-1", fakeEntry({ targetId: null, target: { id: "target-1" } })]
+        ])
+      })
+    });
+
+    const result = await lookupAuditLog(guild, AuditLogEvent.ChannelDelete, "target-1", {
+      retries: 0
+    });
+
+    assert.equal(result.status, "matched");
+    assert.equal(result.actorId, "actor-1");
+  });
+
+  it("picks the entry closest to referenceTime when multiple entries match", async () => {
+    const referenceTime = new Date();
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          [
+            "entry-far",
+            fakeEntry({
+              id: "entry-far",
+              executorId: "actor-far",
+              createdTimestamp: referenceTime.getTime() - 20_000
+            })
+          ],
+          [
+            "entry-near",
+            fakeEntry({
+              id: "entry-near",
+              executorId: "actor-near",
+              createdTimestamp: referenceTime.getTime() - 1_000
+            })
+          ]
+        ])
+      })
+    });
+
+    const result = await lookupAuditLog(guild, AuditLogEvent.ChannelDelete, "target-1", {
+      retries: 0,
+      referenceTime
+    });
+
+    assert.equal(result.status, "matched");
+    assert.equal(result.actorId, "actor-near");
+  });
+
+  it("matches against referenceTime instead of the current call time", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          ["entry-1", fakeEntry({ createdTimestamp: Date.now() - 60_000 })]
+        ])
+      })
+    });
+
+    const result = await lookupAuditLog(guild, AuditLogEvent.ChannelDelete, "target-1", {
+      retries: 0,
+      referenceTime: new Date(Date.now() - 60_000)
+    });
+
+    assert.equal(result.status, "matched");
+  });
+
   it("returns not_found when no entry matches the target id", async () => {
     const guild = fakeGuild({
       fetchAuditLogs: async () => ({

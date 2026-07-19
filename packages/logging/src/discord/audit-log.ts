@@ -9,7 +9,7 @@ import {
 import { userPayload } from "./payloads.js";
 
 const AUDIT_LOG_LOOKUP_WINDOW_MS = 30_000;
-const AUDIT_LOG_FETCH_LIMIT = 6;
+const AUDIT_LOG_FETCH_LIMIT = 100;
 const AUDIT_LOG_RETRY_ATTEMPTS = 2;
 const AUDIT_LOG_RETRY_DELAY_MS = 300;
 
@@ -24,6 +24,8 @@ export interface AuditLogLookupOptions {
   /** 監査ログがまだ反映されていない場合の追加試行回数。初回を含まない。 */
   retries?: number;
   retryDelayMs?: number;
+  /** マッチ判定の基準時刻。イベント発生時刻を渡すことで、処理遅延やイベント多発時の誤相関を防ぐ。既定は呼び出し時刻。 */
+  referenceTime?: Date;
 }
 
 export async function lookupAuditLog(
@@ -41,7 +43,9 @@ export async function lookupAuditLog(
     };
   }
 
-  if (!guild.members.me?.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
+  const me = guild.members.me ?? (await guild.members.fetchMe().catch(() => null));
+
+  if (!me?.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
     return {
       status: "missing_permission",
       actorId: null,
@@ -57,12 +61,16 @@ export async function lookupAuditLog(
 
   const retries = options.retries ?? AUDIT_LOG_RETRY_ATTEMPTS;
   const retryDelayMs = options.retryDelayMs ?? AUDIT_LOG_RETRY_DELAY_MS;
+  const referenceTimestamp = (options.referenceTime ?? new Date()).getTime();
 
   try {
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       const logs = await guild.fetchAuditLogs({ type: action, limit: AUDIT_LOG_FETCH_LIMIT });
-      const entry = logs.entries.find((candidate) =>
-        isMatchingAuditLogEntry(candidate, action, targetId)
+      const entry = findClosestMatchingAuditLogEntry(
+        logs.entries.values(),
+        action,
+        targetId,
+        referenceTimestamp
       );
 
       if (entry) {
@@ -127,16 +135,42 @@ export function applyAuditLog(
   };
 }
 
+function findClosestMatchingAuditLogEntry(
+  entries: Iterable<GuildAuditLogsEntry>,
+  action: AuditLogEvent,
+  targetId: string,
+  referenceTimestamp: number
+): GuildAuditLogsEntry | null {
+  let closest: GuildAuditLogsEntry | null = null;
+  let closestDelta = Infinity;
+
+  for (const entry of entries) {
+    if (!isMatchingAuditLogEntry(entry, action, targetId, referenceTimestamp)) {
+      continue;
+    }
+
+    const delta = Math.abs(referenceTimestamp - entry.createdTimestamp);
+
+    if (delta < closestDelta) {
+      closest = entry;
+      closestDelta = delta;
+    }
+  }
+
+  return closest;
+}
+
 function isMatchingAuditLogEntry(
   entry: GuildAuditLogsEntry,
   action: AuditLogEvent,
-  targetId: string
+  targetId: string,
+  referenceTimestamp: number
 ): boolean {
   if (entry.action !== action) {
     return false;
   }
 
-  if (Date.now() - entry.createdTimestamp > AUDIT_LOG_LOOKUP_WINDOW_MS) {
+  if (Math.abs(referenceTimestamp - entry.createdTimestamp) > AUDIT_LOG_LOOKUP_WINDOW_MS) {
     return false;
   }
 
