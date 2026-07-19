@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { NonThreadGuildBasedChannel } from "discord.js";
 
 import {
   channelPayload,
@@ -183,8 +184,8 @@ describe("channelPayload", () => {
   });
 
   it("returns null rateLimitPerUser when the channel type does not support it", () => {
-    const { rateLimitPerUser: _rateLimitPerUser, ...withoutRateLimit } = fakeChannel();
-    const payload = channelPayload(withoutRateLimit as never);
+    const { rateLimitPerUser: _rateLimitPerUser, ...withoutRateLimit } = fakeChannel() as any;
+    const payload = channelPayload(withoutRateLimit as any);
 
     assert.equal(payload.rateLimitPerUser, null);
   });
