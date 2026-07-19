@@ -3,7 +3,12 @@ import { describe, it } from "node:test";
 
 import { AuditLogEvent, Collection, PermissionsBitField } from "discord.js";
 
-import { applyAuditLog, lookupAuditLog, type AuditLogLookupResult } from "./audit-log.js";
+import {
+  applyAuditLog,
+  getInviteGuild,
+  lookupAuditLog,
+  type AuditLogLookupResult
+} from "./audit-log.js";
 
 function fakeGuild(overrides: Record<string, unknown> = {}) {
   return {
@@ -284,5 +289,26 @@ describe("applyAuditLog", () => {
     const result = applyAuditLog(event, auditLog);
 
     assert.equal(result.actorId, "member-1");
+  });
+});
+
+describe("getInviteGuild", () => {
+  it("returns the guild when it supports fetchAuditLogs", () => {
+    const guild = { id: "guild-1", fetchAuditLogs: async () => ({ entries: new Map() }) };
+    const invite = { guild } as never;
+
+    assert.equal(getInviteGuild(invite), guild);
+  });
+
+  it("returns null when the invite guild is a partial InviteGuild", () => {
+    const invite = { guild: { id: "guild-1", name: "Partial Guild" } } as never;
+
+    assert.equal(getInviteGuild(invite), null);
+  });
+
+  it("returns null when the invite has no guild", () => {
+    const invite = { guild: null } as never;
+
+    assert.equal(getInviteGuild(invite), null);
   });
 });
