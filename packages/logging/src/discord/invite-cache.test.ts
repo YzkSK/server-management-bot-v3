@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 
 import { createInviteCache } from "./invite-cache.js";
 
@@ -91,13 +91,21 @@ describe("createInviteCache", () => {
     });
   });
 
-  it("swallows errors from initGuild (e.g. missing MANAGE_GUILD permission)", async () => {
+  it("swallows errors from initGuild (e.g. missing MANAGE_GUILD permission) but logs them", async () => {
     const cache = createInviteCache();
     const guild = fakeGuild(async () => {
       throw new Error("missing permission");
     });
+    const consoleError = mock.method(console, "error", () => undefined);
 
-    await assert.doesNotReject(cache.initGuild(guild));
-    assert.equal(cache.getAndDelete("guild-1", "abc123"), null);
+    try {
+      await assert.doesNotReject(cache.initGuild(guild));
+      assert.equal(cache.getAndDelete("guild-1", "abc123"), null);
+      assert.equal(consoleError.mock.calls.length, 1);
+      const [, context] = consoleError.mock.calls[0]?.arguments ?? [];
+      assert.equal((context as { guildId?: string }).guildId, "guild-1");
+    } finally {
+      consoleError.mock.restore();
+    }
   });
 });

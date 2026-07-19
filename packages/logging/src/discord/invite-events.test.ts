@@ -38,7 +38,7 @@ describe("normalizeInviteCreate", () => {
 });
 
 describe("normalizeInviteDelete", () => {
-  it("does not attribute invite.delete to the invite creator", () => {
+  it("does not attribute invite.delete to the invite creator when only the cache has one", () => {
     const cached = {
       code: "abc123",
       url: "https://discord.gg/abc123",
@@ -50,6 +50,13 @@ describe("normalizeInviteDelete", () => {
     };
 
     const event = normalizeInviteDelete(fakeInvite({ inviter: null }), cached);
+
+    assert.equal(event.eventName, "invite.delete");
+    assert.equal(event.actorId, null);
+  });
+
+  it("does not attribute invite.delete to the invite creator even when the invite itself has one", () => {
+    const event = normalizeInviteDelete(fakeInvite(), null);
 
     assert.equal(event.eventName, "invite.delete");
     assert.equal(event.actorId, null);

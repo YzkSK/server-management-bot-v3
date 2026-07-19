@@ -52,8 +52,13 @@ export function createInviteCache(): InviteCache {
         for (const invite of invites.values()) {
           map.set(invite.code, toCached(invite));
         }
-      } catch {
-        // MANAGE_GUILD権限が無い場合は黙ってスキップする(旧実装踏襲)。
+      } catch (err) {
+        // MANAGE_GUILD権限が無い場合はスキップする(旧実装踏襲)が、
+        // ネットワーク断等の想定外の失敗は観測できるよう記録する。
+        console.error("invite-cache: failed to initialize guild invites", {
+          guildId: guild.id,
+          err
+        });
       }
     },
 
