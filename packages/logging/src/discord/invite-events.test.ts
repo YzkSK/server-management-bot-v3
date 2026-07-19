@@ -38,7 +38,7 @@ describe("normalizeInviteCreate", () => {
 });
 
 describe("normalizeInviteDelete", () => {
-  it("falls back to the cached inviterId when the invite has no inviter", () => {
+  it("does not attribute invite.delete to the invite creator", () => {
     const cached = {
       code: "abc123",
       url: "https://discord.gg/abc123",
@@ -52,12 +52,22 @@ describe("normalizeInviteDelete", () => {
     const event = normalizeInviteDelete(fakeInvite({ inviter: null }), cached);
 
     assert.equal(event.eventName, "invite.delete");
-    assert.equal(event.actorId, "member-1");
+    assert.equal(event.actorId, null);
   });
 
-  it("uses null actor when there is neither an inviter nor a cache hit", () => {
-    const event = normalizeInviteDelete(fakeInvite({ inviter: null }), null);
+  it("falls back to cached invite fields for the payload when the invite has no inviter", () => {
+    const cached = {
+      code: "abc123",
+      url: "https://discord.gg/abc123",
+      maxAge: 86400,
+      maxUses: 10,
+      temporary: false,
+      uses: 0,
+      inviterId: "member-1"
+    };
 
-    assert.equal(event.actorId, null);
+    const event = normalizeInviteDelete(fakeInvite({ inviter: null, maxAge: null }), cached);
+
+    assert.equal((event.payload.invite as { maxAge: number }).maxAge, 86400);
   });
 });

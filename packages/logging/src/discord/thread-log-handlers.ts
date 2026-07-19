@@ -21,6 +21,12 @@ export interface ThreadLogHandlers {
 export function createThreadLogHandlers(deps: ThreadLogHandlerDeps): ThreadLogHandlers {
   return {
     async onThreadCreate(thread, newlyCreated) {
+      // discord.jsのthreadCreateは新規作成時だけでなく、既存スレッドへの
+      // アクセス同期(botが権限追加等で見えるようになった場合)でも発火するため、
+      // 実際に作成された場合のみthread.createとして記録する。
+      if (!newlyCreated) {
+        return;
+      }
       const event = normalizeThreadCreate(thread, newlyCreated);
       const correlated = await correlateWithAuditLog(
         event,

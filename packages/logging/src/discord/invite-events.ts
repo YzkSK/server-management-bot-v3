@@ -31,7 +31,9 @@ export function normalizeInviteDelete(
     eventTimestamp: now,
     receivedAt: now,
     guildId: invite.guild?.id ?? null,
-    actorId: invite.inviter?.id ?? cached?.inviterId ?? null,
+    // actorIdは削除者を表すため、招待作成者(inviter)をフォールバックにしない。
+    // 削除者はAudit Log相関(correlateWithAuditLog)でのみ補完する。
+    actorId: null,
     channelId: invite.channel?.id ?? null,
     messageId: null,
     payload: {

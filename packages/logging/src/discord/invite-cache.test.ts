@@ -65,6 +65,32 @@ describe("createInviteCache", () => {
     });
   });
 
+  it("does not clobber an invite cached via set() while initGuild's fetch is still in flight", async () => {
+    const cache = createInviteCache();
+    let resolveFetch: (invites: Map<string, unknown>) => void = () => undefined;
+    const guild = fakeGuild(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+
+    const initPromise = cache.initGuild(guild);
+    cache.set("guild-1", fakeInvite({ code: "concurrent1" }));
+    resolveFetch(new Map([["abc123", fakeInvite()]]));
+    await initPromise;
+
+    assert.deepEqual(cache.getAndDelete("guild-1", "concurrent1"), {
+      code: "concurrent1",
+      url: "https://discord.gg/abc123",
+      maxAge: 86400,
+      maxUses: 10,
+      temporary: false,
+      uses: 0,
+      inviterId: "member-1"
+    });
+  });
+
   it("swallows errors from initGuild (e.g. missing MANAGE_GUILD permission)", async () => {
     const cache = createInviteCache();
     const guild = fakeGuild(async () => {

@@ -47,7 +47,8 @@ export function createInviteCache(): InviteCache {
       try {
         const invites = await guild.invites.fetch();
         const map = getOrCreate(guild.id);
-        map.clear();
+        // fetch中にonInviteCreate経由でset()されたエントリを消さないよう、
+        // clear()せずマージする(取得結果で上書き・追加のみ行う)。
         for (const invite of invites.values()) {
           map.set(invite.code, toCached(invite));
         }

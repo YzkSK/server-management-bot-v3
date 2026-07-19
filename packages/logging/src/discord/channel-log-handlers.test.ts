@@ -207,15 +207,17 @@ describe("createChannelLogHandlers", () => {
     assert.equal(writeLogEvent.mock.calls[0]?.arguments[0].eventName, "webhook.update");
   });
 
-  it("correlates webhook.update with a matching audit log entry", async () => {
+  it("does not attempt audit log correlation for webhook.update (targetId is the webhook, not the channel)", async () => {
     const writeLogEvent = fakeWriteLogEvent();
     const handlers = createChannelLogHandlers({ writeLogEvent });
-    const guild = grantedGuild(async () => ({
+    const fetchAuditLogs = mock.fn(async () => ({
       entries: new Collection([["entry-1", auditLogEntry({ action: AuditLogEvent.WebhookUpdate })]])
     }));
+    const guild = grantedGuild(fetchAuditLogs);
 
     await handlers.onWebhooksUpdate(fakeChannel({ guild }));
 
-    assert.equal(writeLogEvent.mock.calls[0]?.arguments[0].actorId, "actor-1");
+    assert.equal(fetchAuditLogs.mock.calls.length, 0);
+    assert.equal(writeLogEvent.mock.calls[0]?.arguments[0].actorId, null);
   });
 });

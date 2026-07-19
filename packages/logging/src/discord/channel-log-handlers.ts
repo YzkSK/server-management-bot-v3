@@ -73,14 +73,12 @@ export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLo
     },
 
     async onWebhooksUpdate(channel) {
+      // Discord Audit LogのWebhookUpdateエントリのtargetIdはwebhook自体のIDであり、
+      // WebhooksUpdateイベントから取得できるchannel.idとは一致しない
+      // (channel.permission_updateが相関対象外なのと同じ理由)。
+      // そのため相関を試みず、actorId: nullのまま記録する。
       const event = normalizeWebhookUpdate(channel);
-      const correlated = await correlateWithAuditLog(
-        event,
-        channel.guild,
-        AuditLogEvent.WebhookUpdate,
-        channel.id
-      );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, event);
     }
   };
 }

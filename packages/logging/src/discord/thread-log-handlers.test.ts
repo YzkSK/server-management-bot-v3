@@ -73,6 +73,15 @@ describe("createThreadLogHandlers", () => {
     assert.equal(writeLogEvent.mock.calls[0]?.arguments[0].eventName, "thread.delete");
   });
 
+  it("skips onThreadCreate when the thread is not newly created (e.g. access sync)", async () => {
+    const writeLogEvent = fakeWriteLogEvent();
+    const handlers = createThreadLogHandlers({ writeLogEvent });
+
+    await handlers.onThreadCreate(fakeThread(), false);
+
+    assert.equal(writeLogEvent.mock.calls.length, 0);
+  });
+
   it("skips thread.update when nothing tracked changed", async () => {
     const writeLogEvent = fakeWriteLogEvent();
     const handlers = createThreadLogHandlers({ writeLogEvent });

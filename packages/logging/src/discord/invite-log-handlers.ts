@@ -19,6 +19,11 @@ export interface InviteLogHandlers {
 
 export function createInviteLogHandlers(deps: InviteLogHandlerDeps): InviteLogHandlers {
   return {
+    // initGuildの完了を待たずに次のイベント処理へ進む(fire-and-forget)。
+    // 起動直後の短いウィンドウでinvite.deleteが届いた場合、キャッシュ未初期化により
+    // maxAge等の補完データが欠けることがあるが、書き込み自体は失敗しない
+    // (許容している劣化。完全に防ぐには全guildのinitGuild完了を待つ必要があり、
+    // 起動時間とのトレードオフになるため見送る)。
     onClientReady(guilds) {
       for (const guild of guilds) {
         void deps.inviteCache.initGuild(guild);
