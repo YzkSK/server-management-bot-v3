@@ -7,6 +7,7 @@ export class DiscordApiError extends Error {
     readonly status: number
   ) {
     super(message);
+    this.name = "DiscordApiError";
   }
 }
 
