@@ -119,48 +119,54 @@ describe("parseBotEnv", () => {
 });
 
 describe("parseDashboardAuthEnv", () => {
-  it("requires DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET and NEXTAUTH_SECRET only", () => {
-    const result = parseDashboardAuthEnv({
-      DISCORD_CLIENT_ID: validEnv.DISCORD_CLIENT_ID,
-      DISCORD_CLIENT_SECRET: validEnv.DISCORD_CLIENT_SECRET,
-      NEXTAUTH_SECRET: validEnv.NEXTAUTH_SECRET
-    });
+  const validDashboardAuthEnv = {
+    DISCORD_CLIENT_ID: validEnv.DISCORD_CLIENT_ID,
+    DISCORD_CLIENT_SECRET: validEnv.DISCORD_CLIENT_SECRET,
+    NEXTAUTH_SECRET: validEnv.NEXTAUTH_SECRET,
+    DISCORD_BOT_TOKEN: validEnv.DISCORD_BOT_TOKEN,
+    DATABASE_URL: validEnv.DATABASE_URL,
+    REDIS_URL: validEnv.REDIS_URL
+  };
+
+  it("requires DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, NEXTAUTH_SECRET, DISCORD_BOT_TOKEN, DATABASE_URL and REDIS_URL", () => {
+    const result = parseDashboardAuthEnv(validDashboardAuthEnv);
     assert.equal(result.DISCORD_CLIENT_ID, validEnv.DISCORD_CLIENT_ID);
     assert.equal(result.DISCORD_CLIENT_SECRET, validEnv.DISCORD_CLIENT_SECRET);
     assert.equal(result.NEXTAUTH_SECRET, validEnv.NEXTAUTH_SECRET);
+    assert.equal(result.DISCORD_BOT_TOKEN, validEnv.DISCORD_BOT_TOKEN);
+    assert.equal(result.DATABASE_URL, validEnv.DATABASE_URL);
+    assert.equal(result.REDIS_URL, validEnv.REDIS_URL);
   });
 
   it("throws a ZodError when DISCORD_CLIENT_ID is missing", () => {
-    assert.throws(
-      () =>
-        parseDashboardAuthEnv({
-          DISCORD_CLIENT_SECRET: validEnv.DISCORD_CLIENT_SECRET,
-          NEXTAUTH_SECRET: validEnv.NEXTAUTH_SECRET
-        }),
-      ZodError
-    );
+    const { DISCORD_CLIENT_ID: _omit, ...incomplete } = validDashboardAuthEnv;
+    assert.throws(() => parseDashboardAuthEnv(incomplete), ZodError);
   });
 
   it("throws a ZodError when DISCORD_CLIENT_ID is empty", () => {
     assert.throws(
-      () =>
-        parseDashboardAuthEnv({
-          DISCORD_CLIENT_ID: "",
-          DISCORD_CLIENT_SECRET: validEnv.DISCORD_CLIENT_SECRET,
-          NEXTAUTH_SECRET: validEnv.NEXTAUTH_SECRET
-        }),
+      () => parseDashboardAuthEnv({ ...validDashboardAuthEnv, DISCORD_CLIENT_ID: "" }),
       ZodError
     );
   });
 
   it("throws a ZodError when DISCORD_CLIENT_SECRET is missing", () => {
-    assert.throws(
-      () =>
-        parseDashboardAuthEnv({
-          DISCORD_CLIENT_ID: validEnv.DISCORD_CLIENT_ID,
-          NEXTAUTH_SECRET: validEnv.NEXTAUTH_SECRET
-        }),
-      ZodError
-    );
+    const { DISCORD_CLIENT_SECRET: _omit, ...incomplete } = validDashboardAuthEnv;
+    assert.throws(() => parseDashboardAuthEnv(incomplete), ZodError);
+  });
+
+  it("throws a ZodError when DISCORD_BOT_TOKEN is missing", () => {
+    const { DISCORD_BOT_TOKEN: _omit, ...incomplete } = validDashboardAuthEnv;
+    assert.throws(() => parseDashboardAuthEnv(incomplete), ZodError);
+  });
+
+  it("throws a ZodError when DATABASE_URL is missing", () => {
+    const { DATABASE_URL: _omit, ...incomplete } = validDashboardAuthEnv;
+    assert.throws(() => parseDashboardAuthEnv(incomplete), ZodError);
+  });
+
+  it("throws a ZodError when REDIS_URL is missing", () => {
+    const { REDIS_URL: _omit, ...incomplete } = validDashboardAuthEnv;
+    assert.throws(() => parseDashboardAuthEnv(incomplete), ZodError);
   });
 });
