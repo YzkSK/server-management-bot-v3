@@ -83,59 +83,49 @@ export async function startBot(): Promise<void> {
     partials: [Partials.Message, Partials.Channel]
   });
 
+  const boundWriteLogEvent = (event: Parameters<typeof writeLogEvent>[1]) =>
+    writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event);
+
   const messageLogHandlers = createMessageLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const memberLogHandlers = createMemberLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const roleLogHandlers = createRoleLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const channelLogHandlers = createChannelLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const guildLogHandlers = createGuildLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const threadLogHandlers = createThreadLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const inviteCache = createInviteCache();
   const inviteLogHandlers = createInviteLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event),
+    writeLogEvent: boundWriteLogEvent,
     inviteCache
   });
   const emojiStickerLogHandlers = createEmojiStickerLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const autoModLogHandlers = createAutoModLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const integrationLogHandlers = createIntegrationLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const pollLogHandlers = createPollLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const scheduledEventLogHandlers = createScheduledEventLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
   const stageLogHandlers = createStageLogHandlers({
-    writeLogEvent: (event) =>
-      writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event)
+    writeLogEvent: boundWriteLogEvent
   });
 
   client.on(Events.GuildCreate, (guild) => {
