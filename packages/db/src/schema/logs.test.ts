@@ -6,6 +6,7 @@ import { parseDatabaseEnv } from "@sm-bot/config";
 import { eq } from "drizzle-orm";
 
 import { createDbConnection, type DbConnection } from "../client.js";
+import { upsertGuild } from "../repositories/guilds.js";
 import { insertLogEvent } from "../repositories/logs.js";
 import { guilds, logs } from "./index.js";
 
@@ -109,6 +110,40 @@ describe("logs schema constraints", () => {
         return true;
       }
     );
+  });
+
+  it("succeeds on retry after upsertGuild recovers a missing guild row (issue #102 FK race)", async () => {
+    const raceGuildId = `logs-schema-race-${randomUUID()}`;
+    await connection.db.delete(guilds).where(eq(guilds.guildId, raceGuildId));
+
+    await assert.rejects(
+      insertLogEvent(connection.db, {
+        eventName: "member.join",
+        guildId: raceGuildId,
+        eventTimestamp: new Date(),
+        payload: {}
+      }),
+      (rawError: unknown) => {
+        const error = unwrapPostgresError(rawError);
+        assert.ok(isPostgresError(error));
+        assert.equal(error.code, "23503");
+        return true;
+      }
+    );
+
+    await upsertGuild(connection.db, raceGuildId);
+
+    const inserted = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: raceGuildId,
+      eventTimestamp: new Date(),
+      payload: {}
+    });
+
+    assert.equal(inserted.guildId, raceGuildId);
+
+    await connection.db.delete(logs).where(eq(logs.guildId, raceGuildId));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, raceGuildId));
   });
 
   it("cascades log deletion when the parent guild is deleted", async () => {

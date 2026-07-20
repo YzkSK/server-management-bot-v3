@@ -255,6 +255,31 @@ describe("writeLogEvent", () => {
     assert.equal(calls.length, 1);
   });
 
+  it("detects a foreign key violation wrapped in err.cause, matching drizzle-orm's postgres-js error shape", async () => {
+    // drizzle-orm(postgres-js)はドライバのエラーをDrizzleQueryErrorでラップし、実際のPostgres
+    // エラーコードは`err.cause.code`に入る(packages/db/src/schema/logs.test.tsのunwrapPostgresError参照)。
+    const pgError = Object.assign(new Error("foreign key violation"), { code: "23503" });
+    const wrappedError = Object.assign(new Error("Failed query"), { cause: pgError });
+    let callCount = 0;
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        throw wrappedError;
+      }
+      return {} as Awaited<ReturnType<typeof InsertLogEvent>>;
+    });
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
+    const { redis, calls } = createFakeRedis();
+    const db = {} as DbClient;
+
+    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode, upsertGuild }, baseEvent);
+
+    assert.equal(upsertGuild.mock.calls.length, 1);
+    assert.equal(insertLogEvent.mock.calls.length, 2);
+    assert.equal(calls.length, 1);
+  });
+
   it("retries only once and rethrows when the retry also fails with a foreign key violation", async () => {
     const fkError = Object.assign(new Error("insert or update on table violates foreign key"), {
       code: "23503"
