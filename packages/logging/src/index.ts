@@ -1,3 +1,4 @@
+export * from "./application/log-backfill.js";
 export * from "./application/log-stream-consumer.js";
 export * from "./application/log-stream.js";
 export * from "./application/log-writer.js";
