@@ -5,7 +5,8 @@ import type {
   DbClient,
   GuildLogMode,
   getGuildLogMode as GetGuildLogMode,
-  insertLogEvent as InsertLogEvent
+  insertLogEvent as InsertLogEvent,
+  upsertGuild as UpsertGuild
 } from "@sm-bot/db";
 import type { NormalizedEvent } from "@sm-bot/shared";
 
@@ -38,16 +39,21 @@ function createFakeGetGuildLogMode(logMode: GuildLogMode) {
   return mock.fn<typeof GetGuildLogMode>(async () => logMode);
 }
 
+function createFakeUpsertGuild() {
+  return mock.fn<typeof UpsertGuild>(async () => {});
+}
+
 describe("writeLogEvent", () => {
   it("writes to the logs table and the shared stream, skipping the realtime stream for a disabled event", async () => {
     const insertLogEvent = mock.fn<typeof InsertLogEvent>(
       async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
     );
     const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
     const { redis, calls } = createFakeRedis();
     const db = {} as DbClient;
 
-    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode }, baseEvent);
+    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode, upsertGuild }, baseEvent);
 
     assert.equal(insertLogEvent.mock.calls.length, 1);
     const insertCall = insertLogEvent.mock.calls[0];
@@ -64,11 +70,12 @@ describe("writeLogEvent", () => {
       async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
     );
     const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
     const { redis, calls } = createFakeRedis();
     const db = {} as DbClient;
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
-    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode }, event);
+    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode, upsertGuild }, event);
 
     assert.equal(insertLogEvent.mock.calls.length, 1);
     const insertCall = insertLogEvent.mock.calls[0];
@@ -93,6 +100,7 @@ describe("writeLogEvent", () => {
       return {} as Awaited<ReturnType<typeof InsertLogEvent>>;
     });
     const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
     const redis: RedisStreamWriter = {
       async xAdd(key) {
         redisCallsBeforeDbResolved.push(key);
@@ -102,7 +110,7 @@ describe("writeLogEvent", () => {
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
     const writePromise = writeLogEvent(
-      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode },
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
       event
     );
 
@@ -126,11 +134,12 @@ describe("writeLogEvent", () => {
       throw dbError;
     });
     const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
     const { redis, calls } = createFakeRedis();
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
     await assert.rejects(
-      writeLogEvent({ db: {} as DbClient, redis, insertLogEvent, getGuildLogMode }, event),
+      writeLogEvent({ db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild }, event),
       dbError
     );
 
@@ -142,10 +151,11 @@ describe("writeLogEvent", () => {
       async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
     );
     const getGuildLogMode = createFakeGetGuildLogMode("disabled");
+    const upsertGuild = createFakeUpsertGuild();
     const { redis, calls } = createFakeRedis();
 
     await writeLogEvent(
-      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode },
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
       baseEvent
     );
 
@@ -159,10 +169,11 @@ describe("writeLogEvent", () => {
       async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
     );
     const getGuildLogMode = createFakeGetGuildLogMode("metadata_only");
+    const upsertGuild = createFakeUpsertGuild();
     const { redis, calls } = createFakeRedis();
 
     await writeLogEvent(
-      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode },
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
       baseEvent
     );
 
@@ -178,6 +189,7 @@ describe("writeLogEvent", () => {
       async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
     );
     const getGuildLogMode = createFakeGetGuildLogMode("disabled");
+    const upsertGuild = createFakeUpsertGuild();
     const { redis, calls } = createFakeRedis();
     const event: NormalizedEvent = {
       ...baseEvent,
@@ -186,7 +198,7 @@ describe("writeLogEvent", () => {
     };
 
     await writeLogEvent(
-      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode },
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
       event
     );
 
@@ -203,16 +215,90 @@ describe("writeLogEvent", () => {
       async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
     );
     const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
     const { redis, calls } = createFakeRedis();
     const event: NormalizedEvent = { ...baseEvent, guildId: null };
 
     await writeLogEvent(
-      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode },
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
       event
     );
 
     assert.equal(getGuildLogMode.mock.calls.length, 0);
     assert.equal(insertLogEvent.mock.calls.length, 1);
     assert.equal(calls.length, 1);
+  });
+
+  it("upserts the guild and retries once when insertLogEvent fails with a foreign key violation", async () => {
+    const fkError = Object.assign(new Error("insert or update on table violates foreign key"), {
+      code: "23503"
+    });
+    let callCount = 0;
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        throw fkError;
+      }
+      return {} as Awaited<ReturnType<typeof InsertLogEvent>>;
+    });
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
+    const { redis, calls } = createFakeRedis();
+    const db = {} as DbClient;
+
+    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode, upsertGuild }, baseEvent);
+
+    assert.equal(upsertGuild.mock.calls.length, 1);
+    assert.equal(upsertGuild.mock.calls[0]?.arguments[0], db);
+    assert.equal(upsertGuild.mock.calls[0]?.arguments[1], baseEvent.guildId);
+    assert.equal(insertLogEvent.mock.calls.length, 2);
+    assert.equal(calls.length, 1);
+  });
+
+  it("does not retry and rethrows when insertLogEvent fails with a non-foreign-key error", async () => {
+    const dbError = new Error("db unavailable");
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => {
+      throw dbError;
+    });
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
+    const { redis, calls } = createFakeRedis();
+
+    await assert.rejects(
+      writeLogEvent(
+        { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+        baseEvent
+      ),
+      dbError
+    );
+
+    assert.equal(upsertGuild.mock.calls.length, 0);
+    assert.equal(insertLogEvent.mock.calls.length, 1);
+    assert.equal(calls.length, 0);
+  });
+
+  it("does not retry a foreign key violation for an event without a guildId", async () => {
+    const fkError = Object.assign(new Error("insert or update on table violates foreign key"), {
+      code: "23503"
+    });
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => {
+      throw fkError;
+    });
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
+    const { redis, calls } = createFakeRedis();
+    const event: NormalizedEvent = { ...baseEvent, guildId: null };
+
+    await assert.rejects(
+      writeLogEvent(
+        { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+        event
+      ),
+      fkError
+    );
+
+    assert.equal(upsertGuild.mock.calls.length, 0);
+    assert.equal(insertLogEvent.mock.calls.length, 1);
+    assert.equal(calls.length, 0);
   });
 });
