@@ -4,7 +4,8 @@ import {
   createDbConnection,
   ensureEveryoneBaselineGrant,
   getGuildLogMode,
-  insertLogEvent
+  insertLogEvent,
+  upsertGuild
 } from "@sm-bot/db";
 import {
   createAutoModLogHandlers,
@@ -84,7 +85,10 @@ export async function startBot(): Promise<void> {
   });
 
   const boundWriteLogEvent = (event: Parameters<typeof writeLogEvent>[1]) =>
-    writeLogEvent({ db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode }, event);
+    writeLogEvent(
+      { db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode, upsertGuild },
+      event
+    );
 
   const messageLogHandlers = createMessageLogHandlers({
     writeLogEvent: boundWriteLogEvent
