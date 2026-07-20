@@ -138,12 +138,37 @@ describe("markLogEventStreamSynced / getUnsyncedLogEvents", () => {
     });
 
     const result = await getUnsyncedLogEvents(connection.db, {
+      limit: 100,
+      olderThanMs: 0
+    });
+
+    const ownRows = result.filter((row) => row.guildId === TEST_GUILD_ID);
+    assert.deepEqual(
+      ownRows.map((row) => row.id),
+      [older.id, newer.id]
+    );
+
+    // receivedAt is set to an implausibly old date so this row is virtually
+    // guaranteed to be the single oldest unsynced row in the whole (shared,
+    // non-guild-scoped) table, keeping the limit assertion below
+    // deterministic even with unrelated pre-existing rows in the dev DB.
+    const third = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("0001-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+
+    const limited = await getUnsyncedLogEvents(connection.db, {
       limit: 1,
       olderThanMs: 0
     });
 
-    assert.equal(result.length, 1);
-    assert.equal(result[0]?.id, older.id);
-    assert.notEqual(result[0]?.id, newer.id);
+    const limitedOwnRows = limited.filter((row) => row.guildId === TEST_GUILD_ID);
+    assert.deepEqual(
+      limitedOwnRows.map((row) => row.id),
+      [third.id]
+    );
   });
 });
