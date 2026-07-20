@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
 
-import type { DbClient, insertLogEvent as InsertLogEvent } from "@sm-bot/db";
+import type {
+  DbClient,
+  GuildLogMode,
+  getGuildLogMode as GetGuildLogMode,
+  insertLogEvent as InsertLogEvent
+} from "@sm-bot/db";
 import type { NormalizedEvent } from "@sm-bot/shared";
 
 import type { RedisStreamWriter } from "./log-stream.js";
@@ -29,15 +34,20 @@ function createFakeRedis() {
   return { redis, calls };
 }
 
+function createFakeGetGuildLogMode(logMode: GuildLogMode) {
+  return mock.fn<typeof GetGuildLogMode>(async () => logMode);
+}
+
 describe("writeLogEvent", () => {
   it("writes to the logs table and the shared stream, skipping the realtime stream for a disabled event", async () => {
     const insertLogEvent = mock.fn<typeof InsertLogEvent>(
       async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
     );
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
     const { redis, calls } = createFakeRedis();
     const db = {} as DbClient;
 
-    await writeLogEvent({ db, redis, insertLogEvent }, baseEvent);
+    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode }, baseEvent);
 
     assert.equal(insertLogEvent.mock.calls.length, 1);
     const insertCall = insertLogEvent.mock.calls[0];
@@ -53,11 +63,12 @@ describe("writeLogEvent", () => {
     const insertLogEvent = mock.fn<typeof InsertLogEvent>(
       async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
     );
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
     const { redis, calls } = createFakeRedis();
     const db = {} as DbClient;
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
-    await writeLogEvent({ db, redis, insertLogEvent }, event);
+    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode }, event);
 
     assert.equal(insertLogEvent.mock.calls.length, 1);
     const insertCall = insertLogEvent.mock.calls[0];
@@ -81,6 +92,7 @@ describe("writeLogEvent", () => {
       await dbWritePending;
       return {} as Awaited<ReturnType<typeof InsertLogEvent>>;
     });
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
     const redis: RedisStreamWriter = {
       async xAdd(key) {
         redisCallsBeforeDbResolved.push(key);
@@ -89,7 +101,10 @@ describe("writeLogEvent", () => {
     };
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
-    const writePromise = writeLogEvent({ db: {} as DbClient, redis, insertLogEvent }, event);
+    const writePromise = writeLogEvent(
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode },
+      event
+    );
 
     await Promise.resolve();
     await Promise.resolve();
@@ -110,14 +125,94 @@ describe("writeLogEvent", () => {
     const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => {
       throw dbError;
     });
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
     const { redis, calls } = createFakeRedis();
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
     await assert.rejects(
-      writeLogEvent({ db: {} as DbClient, redis, insertLogEvent }, event),
+      writeLogEvent({ db: {} as DbClient, redis, insertLogEvent, getGuildLogMode }, event),
       dbError
     );
 
     assert.equal(calls.length, 0);
+  });
+
+  it("does not write to the DB or Redis at all for a disabled-logMode message event", async () => {
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(
+      async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
+    );
+    const getGuildLogMode = createFakeGetGuildLogMode("disabled");
+    const { redis, calls } = createFakeRedis();
+
+    await writeLogEvent(
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode },
+      baseEvent
+    );
+
+    assert.equal(getGuildLogMode.mock.calls.length, 1);
+    assert.equal(insertLogEvent.mock.calls.length, 0);
+    assert.equal(calls.length, 0);
+  });
+
+  it("strips message content before persisting under a metadata_only logMode", async () => {
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(
+      async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
+    );
+    const getGuildLogMode = createFakeGetGuildLogMode("metadata_only");
+    const { redis, calls } = createFakeRedis();
+
+    await writeLogEvent(
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode },
+      baseEvent
+    );
+
+    const insertCall = insertLogEvent.mock.calls[0];
+    assert.equal((insertCall?.arguments[1] as NormalizedEvent).payload.content, undefined);
+
+    assert.equal(calls.length, 1);
+    assert.equal(JSON.parse(calls[0]?.fields.payload ?? "{}").content, undefined);
+  });
+
+  it("does not consult logMode for a non-message event and always writes it in full", async () => {
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(
+      async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
+    );
+    const getGuildLogMode = createFakeGetGuildLogMode("disabled");
+    const { redis, calls } = createFakeRedis();
+    const event: NormalizedEvent = {
+      ...baseEvent,
+      eventName: "member.join",
+      payload: { displayName: "test" }
+    };
+
+    await writeLogEvent(
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode },
+      event
+    );
+
+    // 対象外イベントでは無駄なDB lookupを避けるためgetGuildLogModeを呼ばない。
+    assert.equal(getGuildLogMode.mock.calls.length, 0);
+    assert.equal(insertLogEvent.mock.calls.length, 1);
+    // member.joinはrealtime-policyのデフォルト有効イベントのため共有streamと
+    // per-guild realtime streamの両方に書かれる(resolveRealtimeEnabled参照)。
+    assert.equal(calls.length, 2);
+  });
+
+  it("skips the logMode lookup entirely for events without a guildId", async () => {
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(
+      async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
+    );
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const { redis, calls } = createFakeRedis();
+    const event: NormalizedEvent = { ...baseEvent, guildId: null };
+
+    await writeLogEvent(
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode },
+      event
+    );
+
+    assert.equal(getGuildLogMode.mock.calls.length, 0);
+    assert.equal(insertLogEvent.mock.calls.length, 1);
+    assert.equal(calls.length, 1);
   });
 });
