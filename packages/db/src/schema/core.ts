@@ -70,6 +70,35 @@ export const dashboardAccessGrants = pgTable(
   })
 );
 
+export const guildLogModes = ["full", "metadata_only", "disabled"] as const;
+
+export type GuildLogMode = (typeof guildLogModes)[number];
+
+export const guildConfigs = pgTable(
+  "guild_configs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    guildId: text("guild_id")
+      .notNull()
+      .references(() => guilds.guildId, { onDelete: "cascade" }),
+    logMode: text("log_mode").$type<GuildLogMode>().notNull().default("full"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date())
+  },
+  (table) => ({
+    guildIdIdx: uniqueIndex("guild_configs_guild_id_idx").on(table.guildId),
+    logModeCheck: check(
+      "guild_configs_log_mode_check",
+      sql`${table.logMode} in ('full', 'metadata_only', 'disabled')`
+    )
+  })
+);
+
 export const logs = pgTable(
   "logs",
   {
