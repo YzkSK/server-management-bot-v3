@@ -18,7 +18,7 @@ function createNoopDeps(): LogBackfillDeps {
 }
 
 describe("startLogStreamBackfillLoop", () => {
-  it("runs backfillUnsyncedLogEvents once per interval using the default interval", (t) => {
+  it("runs backfillUnsyncedLogEvents once per interval using the default interval", async (t) => {
     t.mock.timers.enable({ apis: ["setInterval"] });
     const deps = createNoopDeps();
     let calls = 0;
@@ -30,7 +30,15 @@ describe("startLogStreamBackfillLoop", () => {
     const stop = startLogStreamBackfillLoop(deps);
 
     t.mock.timers.tick(DEFAULT_BACKFILL_INTERVAL_MS);
+    // 1回目のtickのrunがsingle-flight guardをresetするまで(finallyまで)
+    // microtaskを流し切ってから、2回目のtickを発火させる。
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
     t.mock.timers.tick(DEFAULT_BACKFILL_INTERVAL_MS);
+    await Promise.resolve();
+    await Promise.resolve();
 
     stop();
 
@@ -151,5 +159,51 @@ describe("startLogStreamBackfillLoop", () => {
     stop();
 
     assert.equal(calls, MAX_BACKFILL_ITERATIONS_PER_RUN);
+  });
+
+  it("skips a tick that fires while the previous run is still in flight", async (t) => {
+    t.mock.timers.enable({ apis: ["setInterval"] });
+    const deps = createNoopDeps();
+    let calls = 0;
+    let resolveFirstCall: (() => void) | undefined;
+    const firstCallPending = new Promise<void>((resolve) => {
+      resolveFirstCall = resolve;
+    });
+
+    deps.getUnsyncedLogEvents = async () => {
+      calls += 1;
+      if (calls === 1) {
+        await firstCallPending;
+      }
+      return [];
+    };
+
+    const stop = startLogStreamBackfillLoop(deps, { intervalMs: 1000 });
+
+    // 1回目のtick: getUnsyncedLogEventsが呼ばれるが、まだ解決しない。
+    t.mock.timers.tick(1000);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(calls, 1, "first tick should have started exactly one run");
+
+    // 前回runが未完了のまま次のtickが発火 → single-flight guardによりskipされ、
+    // getUnsyncedLogEventsは呼ばれないはず。
+    t.mock.timers.tick(1000);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(calls, 1, "overlapping tick must not start a second concurrent run");
+
+    // 前回runを解決させ、後続tickで新たな実行が開始されることを確認する。
+    resolveFirstCall?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    t.mock.timers.tick(1000);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(calls, 2, "a subsequent tick after resolution should start a new run");
+
+    stop();
   });
 });

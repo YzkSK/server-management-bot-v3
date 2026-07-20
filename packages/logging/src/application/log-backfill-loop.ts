@@ -37,7 +37,17 @@ export function startLogStreamBackfillLoop(
   // 最初のintervalが経過するまでbackfillが走らない点は、いずれもレビューで
   // 検討済みの上で意図的に許容している(at-least-once前提で取りこぼしは
   // 後続tickが回収でき、初回までの遅延もこのワークロードでは許容範囲のため)。
+  let isRunning = false;
+
   const timer = setInterval(() => {
+    if (isRunning) {
+      // 前回tickのdrainがintervalMsを超えて実行中。多重実行によるRedisへの
+      // 重複再送を避けるため、このtickはスキップして次回に委ねる
+      // (issue #103レビュー指摘)。
+      return;
+    }
+
+    isRunning = true;
     void (async () => {
       let totalSynced = 0;
       let totalFailed = 0;
@@ -60,6 +70,8 @@ export function startLogStreamBackfillLoop(
           { syncedSoFar: totalSynced, failedSoFar: totalFailed },
           err
         );
+      } finally {
+        isRunning = false;
       }
 
       if (totalSynced > 0 || totalFailed > 0) {
