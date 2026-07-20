@@ -112,8 +112,12 @@ describe("logs schema constraints", () => {
     );
   });
 
-  it("succeeds on retry after upsertGuild recovers a missing guild row (issue #102 FK race)", async () => {
+  it("succeeds on retry after upsertGuild recovers a missing guild row (issue #102 FK race)", async (t) => {
     const raceGuildId = `logs-schema-race-${randomUUID()}`;
+    t.after(async () => {
+      await connection.db.delete(logs).where(eq(logs.guildId, raceGuildId));
+      await connection.db.delete(guilds).where(eq(guilds.guildId, raceGuildId));
+    });
     await connection.db.delete(guilds).where(eq(guilds.guildId, raceGuildId));
 
     await assert.rejects(
@@ -141,9 +145,6 @@ describe("logs schema constraints", () => {
     });
 
     assert.equal(inserted.guildId, raceGuildId);
-
-    await connection.db.delete(logs).where(eq(logs.guildId, raceGuildId));
-    await connection.db.delete(guilds).where(eq(guilds.guildId, raceGuildId));
   });
 
   it("cascades log deletion when the parent guild is deleted", async () => {

@@ -28,6 +28,13 @@ function hasPgErrorCode(err: unknown): err is { code: unknown } {
   return typeof err === "object" && err !== null && "code" in err;
 }
 
+function getCause(err: unknown): unknown {
+  if (typeof err !== "object" || err === null || !("cause" in err)) {
+    return undefined;
+  }
+  return (err as { cause?: unknown }).cause;
+}
+
 // bot起動直後、GuildCreateハンドラのguilds upsertが非同期のfire-and-forgetのため、
 // upsert完了前に同一guildのmessage系イベントが届きlogs.guild_idのFK制約に違反することがある
 // (issue #102)。その場合のみguildをupsertして1回だけ再試行する。
@@ -37,7 +44,7 @@ function isForeignKeyViolation(err: unknown): boolean {
   if (hasPgErrorCode(err) && err.code === FOREIGN_KEY_VIOLATION_CODE) {
     return true;
   }
-  const cause = err instanceof Error ? err.cause : undefined;
+  const cause = getCause(err);
   return hasPgErrorCode(cause) && cause.code === FOREIGN_KEY_VIOLATION_CODE;
 }
 
