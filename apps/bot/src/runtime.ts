@@ -4,7 +4,9 @@ import {
   createDbConnection,
   ensureEveryoneBaselineGrant,
   getGuildLogMode,
+  getUnsyncedLogEvents,
   insertLogEvent,
+  markLogEventStreamSynced,
   upsertGuild
 } from "@sm-bot/db";
 import {
@@ -22,6 +24,7 @@ import {
   createScheduledEventLogHandlers,
   createStageLogHandlers,
   createThreadLogHandlers,
+  startLogStreamBackfillLoop,
   writeLogEvent,
   type RedisStreamWriter
 } from "@sm-bot/logging";
@@ -86,9 +89,23 @@ export async function startBot(): Promise<void> {
 
   const boundWriteLogEvent = (event: Parameters<typeof writeLogEvent>[1]) =>
     writeLogEvent(
-      { db, redis: redisStreamWriter, insertLogEvent, getGuildLogMode, upsertGuild },
+      {
+        db,
+        redis: redisStreamWriter,
+        insertLogEvent,
+        getGuildLogMode,
+        upsertGuild,
+        markLogEventStreamSynced
+      },
       event
     );
+
+  const stopLogStreamBackfillLoop = startLogStreamBackfillLoop({
+    db,
+    redis: redisStreamWriter,
+    getUnsyncedLogEvents,
+    markLogEventStreamSynced
+  });
 
   const messageLogHandlers = createMessageLogHandlers({
     writeLogEvent: boundWriteLogEvent
@@ -303,6 +320,7 @@ export async function startBot(): Promise<void> {
   let isShuttingDown = false;
   const closeConnections = async (): Promise<void> => {
     await client.destroy();
+    stopLogStreamBackfillLoop();
     await Promise.allSettled(pendingLogWrites);
     await Promise.allSettled([close(), redisClient.quit()]);
   };
