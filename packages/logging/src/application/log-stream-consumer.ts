@@ -6,6 +6,7 @@ import {
 const DEFAULT_BLOCK_MS = 5000;
 const DEFAULT_READ_COUNT = 25;
 const DEFAULT_PENDING_RECOVERY_COUNT = 100;
+const DEFAULT_MIN_IDLE_TIME_MS = 5000;
 const NEW_MESSAGES_ONLY_START_ID = "$";
 const BUSYGROUP_ERROR_PREFIX = "BUSYGROUP";
 
@@ -115,7 +116,7 @@ export async function recoverPendingLogEvents(
   consumerName: string,
   options: { minIdleTimeMs?: number; count?: number } = {}
 ) {
-  const minIdleTimeMs = options.minIdleTimeMs ?? DEFAULT_BLOCK_MS;
+  const minIdleTimeMs = options.minIdleTimeMs ?? DEFAULT_MIN_IDLE_TIME_MS;
   const count = options.count ?? DEFAULT_PENDING_RECOVERY_COUNT;
 
   const pendingEntries = await redis.xPendingRange(
