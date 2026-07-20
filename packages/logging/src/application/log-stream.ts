@@ -6,9 +6,6 @@ import {
 export const LOGS_STREAM_KEY = "logs:events";
 export const REALTIME_LOGS_STREAM_PREFIX = "rt:logs:";
 
-const DEFAULT_BLOCK_MS = 5000;
-const DEFAULT_READ_COUNT = 25;
-
 export interface AppendLogEventOptions {
   realtimeEnabled?: boolean;
 }
@@ -33,16 +30,9 @@ export interface RedisStreamWriter {
   ) => Promise<string | null>;
 }
 
-interface RedisStreamMessage {
+export interface RedisStreamMessage {
   id: string;
   message: Record<string, string>;
-}
-
-export interface RedisStreamReader {
-  xRead: (
-    streams: Array<{ key: string; id: string }>,
-    options?: { BLOCK?: number; COUNT?: number }
-  ) => Promise<Array<{ name: string; messages: RedisStreamMessage[] }> | null>;
 }
 
 export async function appendLogEventToStream(
@@ -86,25 +76,6 @@ export function toLogStreamFields(
     realtime_enabled: options.realtimeEnabled === true ? "1" : "0",
     payload: JSON.stringify(parsedEvent.payload)
   };
-}
-
-export async function readRealtimeLogEvents(
-  redis: RedisStreamReader,
-  guildId: string,
-  lastId: string,
-  options: { blockMs?: number; count?: number } = {}
-) {
-  const result = await redis.xRead(
-    [{ key: `${REALTIME_LOGS_STREAM_PREFIX}${guildId}`, id: lastId }],
-    {
-      BLOCK: options.blockMs ?? DEFAULT_BLOCK_MS,
-      COUNT: options.count ?? DEFAULT_READ_COUNT
-    }
-  );
-
-  return (
-    result?.flatMap((stream) => stream.messages.map(toRealtimeLogMessage)) ?? []
-  );
 }
 
 export function toRealtimeLogMessage(message: RedisStreamMessage) {
