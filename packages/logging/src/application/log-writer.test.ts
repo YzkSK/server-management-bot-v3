@@ -255,6 +255,30 @@ describe("writeLogEvent", () => {
     assert.equal(calls.length, 1);
   });
 
+  it("retries only once and rethrows when the retry also fails with a foreign key violation", async () => {
+    const fkError = Object.assign(new Error("insert or update on table violates foreign key"), {
+      code: "23503"
+    });
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => {
+      throw fkError;
+    });
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
+    const { redis, calls } = createFakeRedis();
+
+    await assert.rejects(
+      writeLogEvent(
+        { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+        baseEvent
+      ),
+      fkError
+    );
+
+    assert.equal(upsertGuild.mock.calls.length, 1);
+    assert.equal(insertLogEvent.mock.calls.length, 2);
+    assert.equal(calls.length, 0);
+  });
+
   it("does not retry and rethrows when insertLogEvent fails with a non-foreign-key error", async () => {
     const dbError = new Error("db unavailable");
     const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => {

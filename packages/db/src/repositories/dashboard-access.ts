@@ -1,9 +1,10 @@
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import { BASELINE_EVERYONE_CAPABILITIES } from "@sm-bot/shared";
 
 import type { DbClient } from "../client.js";
-import { dashboardAccessGrants, guilds } from "../schema/index.js";
+import { dashboardAccessGrants } from "../schema/index.js";
+import { upsertGuild } from "./guilds.js";
 
 export interface EnsureEveryoneBaselineGrantInput {
   guildId: string;
@@ -15,16 +16,7 @@ export async function ensureEveryoneBaselineGrant(
   input: EnsureEveryoneBaselineGrantInput
 ): Promise<{ created: boolean }> {
   return db.transaction(async (tx) => {
-    await tx
-      .insert(guilds)
-      .values({ guildId: input.guildId })
-      .onConflictDoUpdate({
-        target: guilds.guildId,
-        set: {
-          isActive: true,
-          updatedAt: sql`now()`
-        }
-      });
+    await upsertGuild(tx, input.guildId);
 
     const inserted = await tx
       .insert(dashboardAccessGrants)

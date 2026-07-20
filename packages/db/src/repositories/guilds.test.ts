@@ -37,7 +37,7 @@ describe("upsertGuild", () => {
     assert.equal(guildRows[0]?.guildId, "guild-1");
   });
 
-  it("is a no-op conflict update when the guild row already exists", async () => {
+  it("reactivates an existing guild row on conflict", async () => {
     const guildRows: Array<Record<string, unknown>> = [{ guildId: "guild-1", isActive: false }];
     const db = createFakeDb(guildRows);
 
