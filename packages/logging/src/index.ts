@@ -1,3 +1,4 @@
+export * from "./application/log-stream-consumer.js";
 export * from "./application/log-stream.js";
 export * from "./application/log-writer.js";
 export * from "./discord/audit-log.js";

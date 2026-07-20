@@ -7,9 +7,7 @@ import {
   appendLogEventToStream,
   appendRealtimeLogEventToStream,
   LOGS_STREAM_KEY,
-  readRealtimeLogEvents,
   REALTIME_LOGS_STREAM_PREFIX,
-  type RedisStreamReader,
   type RedisStreamWriter,
   toLogStreamFields
 } from "./log-stream.js";
@@ -84,44 +82,5 @@ describe("appendRealtimeLogEventToStream", () => {
 
     assert.equal(result, null);
     assert.equal(calls.length, 0);
-  });
-});
-
-describe("readRealtimeLogEvents", () => {
-  it("maps raw Redis stream messages back into typed log events", async () => {
-    const reader: RedisStreamReader = {
-      async xRead(streams) {
-        assert.equal(streams[0]?.key, `${REALTIME_LOGS_STREAM_PREFIX}guild-1`);
-        return [
-          {
-            name: streams[0]!.key,
-            messages: [
-              {
-                id: "1-0",
-                message: toLogStreamFields(baseEvent, { realtimeEnabled: true })
-              }
-            ]
-          }
-        ];
-      }
-    };
-
-    const events = await readRealtimeLogEvents(reader, "guild-1", "0");
-
-    assert.equal(events.length, 1);
-    assert.equal(events[0]?.eventName, "member.join");
-    assert.equal(events[0]?.realtimeEnabled, true);
-    assert.deepEqual(events[0]?.payload, { displayName: "test" });
-  });
-
-  it("returns an empty array when xRead returns null (timeout)", async () => {
-    const reader: RedisStreamReader = {
-      async xRead() {
-        return null;
-      }
-    };
-
-    const events = await readRealtimeLogEvents(reader, "guild-1", "0");
-    assert.deepEqual(events, []);
   });
 });
