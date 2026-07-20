@@ -1,4 +1,10 @@
-import type { DbClient, getGuildLogMode, insertLogEvent, upsertGuild } from "@sm-bot/db";
+import type {
+  DbClient,
+  getGuildLogMode,
+  insertLogEvent,
+  markLogEventStreamSynced,
+  upsertGuild
+} from "@sm-bot/db";
 import type { NormalizedEvent } from "@sm-bot/shared";
 
 import {
@@ -19,6 +25,7 @@ export interface LogWriterDeps {
   insertLogEvent: typeof insertLogEvent;
   getGuildLogMode: typeof getGuildLogMode;
   upsertGuild: typeof upsertGuild;
+  markLogEventStreamSynced: typeof markLogEventStreamSynced;
 }
 
 // PostgreSQLのforeign_key_violationエラーコード。
@@ -70,20 +77,34 @@ export async function writeLogEvent(
 
   // logsテーブルへの永続化を正とするため、DB書き込みが成功してからRedis Streamに流す。
   // 先にstreamへ流すと、DB insert失敗時に「永続化されていないイベント」がstream読者に見えてしまう。
+  let log: Awaited<ReturnType<typeof insertLogEvent>>;
   try {
-    await deps.insertLogEvent(deps.db, { ...eventToPersist, realtimeEnabled });
+    log = await deps.insertLogEvent(deps.db, { ...eventToPersist, realtimeEnabled });
   } catch (err) {
     if (!eventToPersist.guildId || !isForeignKeyViolation(err)) {
       throw err;
     }
     await deps.upsertGuild(deps.db, eventToPersist.guildId);
-    await deps.insertLogEvent(deps.db, { ...eventToPersist, realtimeEnabled });
+    log = await deps.insertLogEvent(deps.db, { ...eventToPersist, realtimeEnabled });
   }
 
-  await Promise.all([
-    appendLogEventToStream(deps.redis, eventToPersist, { realtimeEnabled }),
-    realtimeEnabled
-      ? appendRealtimeLogEventToStream(deps.redis, eventToPersist, { realtimeEnabled })
-      : Promise.resolve()
-  ]);
+  // DB insertが正のため、stream書き込みの失敗はここでthrowせずbackfillUnsyncedLogEvents
+  // (log-backfill.ts)による再送に委ねる(issue #103)。未同期のレコードはlogs.stream_synced_at
+  // がnullのまま残り、backfillが後から検出する。
+  try {
+    await Promise.all([
+      appendLogEventToStream(deps.redis, eventToPersist, { realtimeEnabled }),
+      realtimeEnabled
+        ? appendRealtimeLogEventToStream(deps.redis, eventToPersist, { realtimeEnabled })
+        : Promise.resolve()
+    ]);
+    await deps.markLogEventStreamSynced(deps.db, log.id);
+  } catch (err) {
+    console.error("log-writer: failed to append log event to redis stream", {
+      logId: log.id,
+      eventName: eventToPersist.eventName,
+      guildId: eventToPersist.guildId,
+      err
+    });
+  }
 }
