@@ -3,9 +3,10 @@ import { describe, it, mock } from "node:test";
 
 import {
   DEFAULT_BACKFILL_INTERVAL_MS,
+  MAX_BACKFILL_ITERATIONS_PER_RUN,
   startLogStreamBackfillLoop
 } from "./log-backfill-loop.js";
-import type { LogBackfillDeps } from "./log-backfill.js";
+import { DEFAULT_BACKFILL_BATCH_SIZE, type LogBackfillDeps } from "./log-backfill.js";
 
 function createNoopDeps(): LogBackfillDeps {
   return {
@@ -76,5 +77,79 @@ describe("startLogStreamBackfillLoop", () => {
     stop();
 
     assert.equal(calls, 2);
+  });
+
+  it("drains multiple batches within a single tick when there is a large backlog", async (t) => {
+    t.mock.timers.enable({ apis: ["setInterval"] });
+    const deps = createNoopDeps();
+    let calls = 0;
+
+    function makeBatch(size: number) {
+      return Array.from({ length: size }, (_, i) => ({
+        id: `row-${calls}-${i}`,
+        eventName: "member.join",
+        guildId: "guild-1",
+        actorId: null,
+        channelId: null,
+        messageId: null,
+        eventTimestamp: new Date(0),
+        receivedAt: new Date(0),
+        realtimeEnabled: false,
+        payload: {}
+      }));
+    }
+
+    deps.getUnsyncedLogEvents = async () => {
+      calls += 1;
+      // 最初の2回はフルバッチ、3回目で空を返してdrain完了を示す。
+      if (calls <= 2) {
+        return makeBatch(DEFAULT_BACKFILL_BATCH_SIZE);
+      }
+      return [];
+    };
+
+    const stop = startLogStreamBackfillLoop(deps);
+
+    t.mock.timers.tick(DEFAULT_BACKFILL_INTERVAL_MS);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    stop();
+
+    assert.equal(calls, 3);
+  });
+
+  it("stops after MAX_BACKFILL_ITERATIONS_PER_RUN calls within one tick when the backlog never drains", async (t) => {
+    t.mock.timers.enable({ apis: ["setInterval"] });
+    const deps = createNoopDeps();
+    let calls = 0;
+
+    function makeBatch(size: number) {
+      return Array.from({ length: size }, (_, i) => ({
+        id: `row-${calls}-${i}`,
+        eventName: "member.join",
+        guildId: "guild-1",
+        actorId: null,
+        channelId: null,
+        messageId: null,
+        eventTimestamp: new Date(0),
+        receivedAt: new Date(0),
+        realtimeEnabled: false,
+        payload: {}
+      }));
+    }
+
+    deps.getUnsyncedLogEvents = async () => {
+      calls += 1;
+      return makeBatch(DEFAULT_BACKFILL_BATCH_SIZE);
+    };
+
+    const stop = startLogStreamBackfillLoop(deps);
+
+    t.mock.timers.tick(DEFAULT_BACKFILL_INTERVAL_MS);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    stop();
+
+    assert.equal(calls, MAX_BACKFILL_ITERATIONS_PER_RUN);
   });
 });

@@ -43,6 +43,13 @@
       "when": 1784583383573,
       "tag": "0005_jazzy_butterfly",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784586297640,
+      "tag": "0006_wise_patch",
+      "breakpoints": true
     }
   ]
 }

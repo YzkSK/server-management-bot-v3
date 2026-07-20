@@ -132,8 +132,10 @@ export const logs = pgTable(
       table.guildId,
       table.receivedAt
     ),
-    streamSyncedAtIdx: index("logs_stream_synced_at_idx").on(
-      table.streamSyncedAt
-    )
+    // 未同期(streamSyncedAt IS NULL)の行だけを対象にした部分index。
+    // ほぼ全行が最終的にsync済みになるため、全件対象のindexだと肥大化し続ける(issue #103レビュー指摘)。
+    streamSyncedAtIdx: index("logs_stream_synced_at_idx")
+      .on(table.receivedAt)
+      .where(sql`${table.streamSyncedAt} IS NULL`)
   })
 );

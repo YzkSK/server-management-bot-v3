@@ -126,14 +126,14 @@ describe("markLogEventStreamSynced / getUnsyncedLogEvents", () => {
       eventName: "member.join",
       guildId: TEST_GUILD_ID,
       eventTimestamp: new Date(0),
-      receivedAt: new Date("2026-01-01T00:00:00.000Z"),
+      receivedAt: new Date("0002-01-01T00:00:00.000Z"),
       payload: {}
     });
     const newer = await insertLogEvent(connection.db, {
       eventName: "member.join",
       guildId: TEST_GUILD_ID,
       eventTimestamp: new Date(0),
-      receivedAt: new Date("2026-01-02T00:00:00.000Z"),
+      receivedAt: new Date("0003-01-01T00:00:00.000Z"),
       payload: {}
     });
 
