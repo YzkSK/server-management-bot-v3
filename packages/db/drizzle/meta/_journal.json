@@ -50,6 +50,13 @@
       "when": 1784586297640,
       "tag": "0006_wise_patch",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784586921208,
+      "tag": "0007_backfill_existing_logs_stream_synced_at",
+      "breakpoints": true
     }
   ]
 }
