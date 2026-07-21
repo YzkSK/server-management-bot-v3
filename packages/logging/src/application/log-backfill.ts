@@ -49,32 +49,38 @@ export async function backfillUnsyncedLogEvents(
 
   const rows = await deps.getUnsyncedLogEvents(deps.db, { limit, olderThanMs });
 
-  let synced = 0;
-  let failed = 0;
-
-  for (const row of rows) {
-    const event = toNormalizedEvent(row);
-    try {
-      await Promise.all([
-        appendLogEventToStream(deps.redis, event, { realtimeEnabled: row.realtimeEnabled }),
-        row.realtimeEnabled
-          ? appendRealtimeLogEventToStream(deps.redis, event, {
-              realtimeEnabled: row.realtimeEnabled
-            })
-          : Promise.resolve()
-      ]);
-      await deps.markLogEventStreamSynced(deps.db, row.id);
-      synced += 1;
-    } catch (err) {
-      failed += 1;
-      console.error("log-backfill: failed to re-append unsynced log event to redis stream", {
-        logId: row.id,
-        eventName: row.eventName,
-        guildId: row.guildId,
-        err
-      });
-    }
+  if (rows.length === 0) {
+    return { synced: 0, failed: 0 };
   }
+
+  const results = await Promise.all(
+    rows.map(async (row) => {
+      const event = toNormalizedEvent(row);
+      try {
+        await Promise.all([
+          appendLogEventToStream(deps.redis, event, { realtimeEnabled: row.realtimeEnabled }),
+          row.realtimeEnabled
+            ? appendRealtimeLogEventToStream(deps.redis, event, {
+                realtimeEnabled: row.realtimeEnabled
+              })
+            : Promise.resolve()
+        ]);
+        await deps.markLogEventStreamSynced(deps.db, row.id);
+        return true;
+      } catch (err) {
+        console.error("log-backfill: failed to re-append unsynced log event to redis stream", {
+          logId: row.id,
+          eventName: row.eventName,
+          guildId: row.guildId,
+          err
+        });
+        return false;
+      }
+    })
+  );
+
+  const synced = results.filter(Boolean).length;
+  const failed = results.length - synced;
 
   return { synced, failed };
 }
