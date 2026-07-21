@@ -119,6 +119,65 @@ describe("backfillUnsyncedLogEvents", () => {
     assert.equal(markLogEventStreamSynced.mock.calls[0]?.arguments[1], "log-ok");
   });
 
+  it("marks the row failed and logs a distinct message when only markLogEventStreamSynced fails", async () => {
+    const rows = [makeUnsyncedRow({ id: "log-1" })];
+    const getUnsyncedLogEvents = mock.fn<typeof GetUnsyncedLogEvents>(async () => rows);
+    const markLogEventStreamSynced = mock.fn<typeof MarkLogEventStreamSynced>(async () => {
+      throw new Error("db unavailable");
+    });
+    const redis: RedisStreamWriter = { xAdd: async () => "1-0" };
+    const db = {} as DbClient;
+
+    const errorSpy = mock.method(console, "error", () => {});
+    try {
+      const result = await backfillUnsyncedLogEvents({
+        db,
+        redis,
+        getUnsyncedLogEvents,
+        markLogEventStreamSynced
+      });
+
+      assert.equal(result.synced, 0);
+      assert.equal(result.failed, 1);
+      assert.equal(errorSpy.mock.calls.length, 1);
+      assert.equal(
+        errorSpy.mock.calls[0]?.arguments[0],
+        "log-backfill: failed to mark log event as stream-synced"
+      );
+    } finally {
+      errorSpy.mock.restore();
+    }
+  });
+
+  it("caps in-flight row processing at the configured concurrency limit", async () => {
+    const rows = Array.from({ length: 25 }, (_, i) => makeUnsyncedRow({ id: `log-${i}` }));
+    const getUnsyncedLogEvents = mock.fn<typeof GetUnsyncedLogEvents>(async () => rows);
+    const markLogEventStreamSynced = mock.fn<typeof MarkLogEventStreamSynced>(async () => {});
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const redis: RedisStreamWriter = {
+      xAdd: async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        inFlight -= 1;
+        return "1-0";
+      }
+    };
+    const db = {} as DbClient;
+
+    const result = await backfillUnsyncedLogEvents({
+      db,
+      redis,
+      getUnsyncedLogEvents,
+      markLogEventStreamSynced
+    });
+
+    assert.equal(result.synced, 25);
+    assert.ok(maxInFlight <= 10, `expected concurrency to be capped, got ${maxInFlight}`);
+  });
+
   it("respects a custom limit and olderThanMs", async () => {
     const getUnsyncedLogEvents = mock.fn<typeof GetUnsyncedLogEvents>(async () => []);
     const markLogEventStreamSynced = mock.fn<typeof MarkLogEventStreamSynced>(async () => {});
