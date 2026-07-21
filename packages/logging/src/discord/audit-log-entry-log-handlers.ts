@@ -4,7 +4,6 @@ import { AuditLogEvent, type Guild, type GuildAuditLogsEntry } from "discord.js"
 import {
   DEDICATED_AUDIT_LOG_ACTIONS,
   normalizeAuditLogEntry,
-  normalizeAuditLogMessageBulkDelete,
   normalizeAuditLogMessageDelete
 } from "./audit-log-entry-events.js";
 
@@ -23,11 +22,6 @@ export function createAuditLogEntryLogHandlers(
     async onAuditLogEntryCreate(entry, guild) {
       if (entry.action === AuditLogEvent.MessageDelete) {
         await writeSafely(deps, normalizeAuditLogMessageDelete(entry, guild));
-        return;
-      }
-
-      if (entry.action === AuditLogEvent.MessageBulkDelete) {
-        await writeSafely(deps, normalizeAuditLogMessageBulkDelete(entry, guild));
         return;
       }
 

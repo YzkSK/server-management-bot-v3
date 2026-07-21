@@ -1,5 +1,10 @@
 import type { NormalizedEvent } from "@sm-bot/shared";
-import type { Message, PartialMessage } from "discord.js";
+import type {
+  GuildTextBasedChannel,
+  Message,
+  PartialMessage,
+  ReadonlyCollection
+} from "discord.js";
 
 type AnyMessage = Message | PartialMessage;
 
@@ -70,6 +75,32 @@ export function normalizeMessageDelete(message: AnyMessage): NormalizedEvent {
     payload: {
       content: message.content ?? null,
       attachments: attachmentPayload(message)
+    }
+  };
+}
+
+/**
+ * 実行者(actorId)はゲートウェイ到着時点では判定できないため、
+ * message-log-handlers.tsのlookupAuditLog/applyAuditLogによる相関で
+ * 補完される前提でactorId: null/reason: nullのまま正規化する。
+ */
+export function normalizeMessageBulkDelete(
+  messages: ReadonlyCollection<string, AnyMessage>,
+  channel: GuildTextBasedChannel
+): NormalizedEvent {
+  const now = new Date();
+  return {
+    eventName: "message.bulk_delete",
+    eventTimestamp: now,
+    receivedAt: now,
+    guildId: channel.guildId,
+    actorId: null,
+    channelId: channel.id,
+    messageId: null,
+    payload: {
+      messageIds: [...messages.keys()],
+      count: messages.size,
+      reason: null
     }
   };
 }

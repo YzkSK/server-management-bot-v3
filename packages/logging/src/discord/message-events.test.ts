@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  normalizeMessageBulkDelete,
   normalizeMessageCreate,
   normalizeMessageDelete,
   normalizeMessageUpdate,
@@ -197,5 +198,31 @@ describe("normalizeMessageDelete", () => {
       new Date("2020-01-01T00:00:00.000Z").getTime()
     );
     assert.ok(event.eventTimestamp.getTime() >= before && event.eventTimestamp.getTime() <= after);
+  });
+});
+
+describe("normalizeMessageBulkDelete", () => {
+  function fakeChannel(overrides: Record<string, unknown> = {}) {
+    return { id: "channel-1", guildId: "guild-1", ...overrides } as never;
+  }
+
+  it("normalizes the deleted message ids and count, actorId unresolved", () => {
+    const messages = new Map([
+      ["message-1", fakeMessage({ id: "message-1" })],
+      ["message-2", fakeMessage({ id: "message-2" })]
+    ]) as never;
+
+    const event = normalizeMessageBulkDelete(messages, fakeChannel());
+
+    assert.equal(event.eventName, "message.bulk_delete");
+    assert.equal(event.guildId, "guild-1");
+    assert.equal(event.channelId, "channel-1");
+    assert.equal(event.messageId, null);
+    assert.equal(event.actorId, null);
+    assert.deepEqual(event.payload, {
+      messageIds: ["message-1", "message-2"],
+      count: 2,
+      reason: null
+    });
   });
 });

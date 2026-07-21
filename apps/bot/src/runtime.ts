@@ -185,6 +185,9 @@ export async function startBot(): Promise<void> {
   client.on(Events.MessageDelete, (message) => {
     trackLogWrite(messageLogHandlers.onMessageDelete(message));
   });
+  client.on(Events.MessageBulkDelete, (messages, channel) => {
+    trackLogWrite(messageLogHandlers.onMessageBulkDelete(messages, channel));
+  });
 
   client.on(Events.GuildMemberAdd, (member) => {
     trackLogWrite(memberLogHandlers.onGuildMemberAdd(member));
