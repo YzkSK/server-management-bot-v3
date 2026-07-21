@@ -179,39 +179,49 @@ describe("fetchGuildMemberAccess", () => {
     assert.equal(memberCallCount, 2);
   });
 
-  it("falls back to a default wait when Retry-After is missing or invalid", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout"] });
-    let memberCallCount = 0;
-    mock.method(globalThis, "fetch", async (input: string | URL) => {
-      const url = input.toString();
-      if (url.includes("/members/")) {
-        memberCallCount += 1;
-        if (memberCallCount === 1) {
-          return new Response(null, { status: 429 });
+  for (const [caseName, retryAfterHeader] of [
+    ["missing", undefined],
+    ["invalid (non-numeric)", "invalid"],
+    ["negative", "-1"],
+    ["empty string", ""],
+    ["whitespace only", "   "]
+  ] as const) {
+    it(`falls back to a default 1s wait when Retry-After is ${caseName}`, async (t) => {
+      t.mock.timers.enable({ apis: ["setTimeout"] });
+      let memberCallCount = 0;
+      mock.method(globalThis, "fetch", async (input: string | URL) => {
+        const url = input.toString();
+        if (url.includes("/members/")) {
+          memberCallCount += 1;
+          if (memberCallCount === 1) {
+            return retryAfterHeader === undefined
+              ? new Response(null, { status: 429 })
+              : new Response(null, { status: 429, headers: { "Retry-After": retryAfterHeader } });
+          }
+          return jsonResponse(200, { roles: [] });
         }
-        return jsonResponse(200, { roles: [] });
-      }
-      return jsonResponse(200, { owner_id: "someone-else" });
+        return jsonResponse(200, { owner_id: "someone-else" });
+      });
+
+      const resultPromise = fetchGuildMemberAccess({
+        botToken: BOT_TOKEN,
+        guildId: GUILD_ID,
+        userId: USER_ID
+      });
+      await flushMicrotasks();
+      t.mock.timers.tick(999);
+      await flushMicrotasks();
+      assert.equal(memberCallCount, 1);
+
+      t.mock.timers.tick(1);
+      await flushMicrotasks();
+
+      const result = await resultPromise;
+
+      assert.deepEqual(result, { roleIds: [GUILD_ID], isGuildOwner: false });
+      assert.equal(memberCallCount, 2);
     });
-
-    const resultPromise = fetchGuildMemberAccess({
-      botToken: BOT_TOKEN,
-      guildId: GUILD_ID,
-      userId: USER_ID
-    });
-    await flushMicrotasks();
-    t.mock.timers.tick(999);
-    await flushMicrotasks();
-    assert.equal(memberCallCount, 1);
-
-    t.mock.timers.tick(1);
-    await flushMicrotasks();
-
-    const result = await resultPromise;
-
-    assert.deepEqual(result, { roleIds: [GUILD_ID], isGuildOwner: false });
-    assert.equal(memberCallCount, 2);
-  });
+  }
 
   it("caps an excessively large Retry-After so it doesn't block the request indefinitely", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -256,7 +266,7 @@ describe("fetchGuildMemberAccess", () => {
         return jsonResponse(200, { roles: [] });
       }
       guildCallCount += 1;
-      if (guildCallCount === 1) {
+      if (guildCallCount < 3) {
         return jsonResponse(502, { message: "Bad Gateway" });
       }
       return jsonResponse(200, { owner_id: USER_ID });
@@ -267,18 +277,27 @@ describe("fetchGuildMemberAccess", () => {
       guildId: GUILD_ID,
       userId: USER_ID
     });
+
+    // 1回目の待機: 250ms(2^0 * 250ms)
     await flushMicrotasks();
     t.mock.timers.tick(249);
     await flushMicrotasks();
     assert.equal(guildCallCount, 1);
+    t.mock.timers.tick(1);
+    await flushMicrotasks();
+    assert.equal(guildCallCount, 2);
 
+    // 2回目の待機: 500ms(2^1 * 250ms)、単なる固定待機ではなく増加することを検証
+    t.mock.timers.tick(499);
+    await flushMicrotasks();
+    assert.equal(guildCallCount, 2);
     t.mock.timers.tick(1);
     await flushMicrotasks();
 
     const result = await resultPromise;
 
     assert.deepEqual(result, { roleIds: [GUILD_ID], isGuildOwner: true });
-    assert.equal(guildCallCount, 2);
+    assert.equal(guildCallCount, 3);
   });
 
   it("gives up and throws DiscordApiError after exhausting retries on persistent 5xx", async (t) => {

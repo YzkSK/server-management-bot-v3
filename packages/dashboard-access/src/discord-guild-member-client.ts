@@ -49,8 +49,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 function parseRetryAfterMs(response: Response): number {
-  const header = response.headers.get("Retry-After");
-  const seconds = header === null ? Number.NaN : Number(header);
+  const header = response.headers.get("Retry-After")?.trim();
+  const seconds = header ? Number(header) : Number.NaN;
   if (!Number.isFinite(seconds) || seconds < 0) {
     return DISCORD_DEFAULT_RETRY_AFTER_MS;
   }
