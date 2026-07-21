@@ -78,6 +78,14 @@ describe("scrubSensitiveStrings", () => {
     assert.equal(result.content, "server at [REDACTED_IP] responded");
   });
 
+  it("masks a bare :: compressed IPv6 address that starts with '::' (::1)", () => {
+    const payload = { content: "loopback ::1 responded" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "loopback [REDACTED_IP] responded");
+  });
+
   it("does not mask a Discord snowflake ID inside a mention (fails Luhn check)", () => {
     // 123456789012345678 は18桁でスノーフレークID形状の候補に該当するが、
     // Luhnチェックサムを満たさない(node .superpowers/sdd/luhn-check.js で検証済み、
