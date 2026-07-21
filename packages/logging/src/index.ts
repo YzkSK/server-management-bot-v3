@@ -5,6 +5,8 @@ export * from "./application/log-stream-consumer.js";
 export * from "./application/log-stream.js";
 export * from "./application/log-writer.js";
 export * from "./discord/audit-log.js";
+export * from "./discord/audit-log-entry-events.js";
+export * from "./discord/audit-log-entry-log-handlers.js";
 export * from "./discord/automod-events.js";
 export * from "./discord/automod-log-handlers.js";
 export * from "./discord/channel-events.js";

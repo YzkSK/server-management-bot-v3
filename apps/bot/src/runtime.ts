@@ -10,6 +10,7 @@ import {
   upsertGuild
 } from "@sm-bot/db";
 import {
+  createAuditLogEntryLogHandlers,
   createAutoModLogHandlers,
   createChannelLogHandlers,
   createEmojiStickerLogHandlers,
@@ -63,7 +64,7 @@ export async function startBot(): Promise<void> {
       // privileged intent: Discord Developer PortalでServer Members Intentを
       // 有効化しないと、guildMemberAdd/Remove/Updateが発火しない。
       GatewayIntentBits.GuildMembers,
-      // guildBanAdd/guildBanRemoveの受信に必要。
+      // guildBanAdd/guildBanRemove、guildAuditLogEntryCreateの受信に必要。
       GatewayIntentBits.GuildModeration,
       // invite.create/deleteの受信に必要。
       GatewayIntentBits.GuildInvites,
@@ -146,6 +147,9 @@ export async function startBot(): Promise<void> {
     writeLogEvent: boundWriteLogEvent
   });
   const stageLogHandlers = createStageLogHandlers({
+    writeLogEvent: boundWriteLogEvent
+  });
+  const auditLogEntryLogHandlers = createAuditLogEntryLogHandlers({
     writeLogEvent: boundWriteLogEvent
   });
 
@@ -310,6 +314,10 @@ export async function startBot(): Promise<void> {
   });
   client.on(Events.StageInstanceDelete, (stage) => {
     trackLogWrite(stageLogHandlers.onStageDelete(stage));
+  });
+
+  client.on(Events.GuildAuditLogEntryCreate, (auditLogEntry, guild) => {
+    trackLogWrite(auditLogEntryLogHandlers.onAuditLogEntryCreate(auditLogEntry, guild));
   });
 
   client.once(Events.ClientReady, (readyClient) => {
