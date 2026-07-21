@@ -7,6 +7,7 @@ import {
   applyAuditLog,
   getInviteGuild,
   lookupAuditLog,
+  lookupWebhookAuditLogAction,
   type AuditLogLookupResult
 } from "./audit-log.js";
 
@@ -237,6 +238,124 @@ describe("lookupAuditLog", () => {
 
     assert.equal(result.status, "error");
     assert.equal((result.payload as { message: string }).message, "boom");
+  });
+});
+
+describe("lookupWebhookAuditLogAction", () => {
+  it("returns missing_guild when guild is null", async () => {
+    const result = await lookupWebhookAuditLogAction(null, "channel-1");
+
+    assert.equal(result.status, "missing_guild");
+    assert.equal(result.action, null);
+  });
+
+  it("returns missing_permission when bot lacks ViewAuditLog", async () => {
+    const guild = fakeGuild({
+      members: { me: { permissions: new PermissionsBitField() } }
+    });
+
+    const result = await lookupWebhookAuditLogAction(guild, "channel-1");
+
+    assert.equal(result.status, "missing_permission");
+    assert.equal(result.action, null);
+  });
+
+  it("matches a WebhookCreate entry whose target channelId equals the given channel", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          [
+            "entry-1",
+            fakeEntry({
+              action: AuditLogEvent.WebhookCreate,
+              target: { channelId: "channel-1" }
+            })
+          ]
+        ])
+      })
+    });
+
+    const result = await lookupWebhookAuditLogAction(guild, "channel-1", { retries: 0 });
+
+    assert.equal(result.status, "matched");
+    assert.equal(result.action, AuditLogEvent.WebhookCreate);
+    assert.equal(result.actorId, "actor-1");
+  });
+
+  it("matches a WebhookDelete entry whose target channelId equals the given channel", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          [
+            "entry-1",
+            fakeEntry({
+              action: AuditLogEvent.WebhookDelete,
+              target: { channelId: "channel-1" }
+            })
+          ]
+        ])
+      })
+    });
+
+    const result = await lookupWebhookAuditLogAction(guild, "channel-1", { retries: 0 });
+
+    assert.equal(result.status, "matched");
+    assert.equal(result.action, AuditLogEvent.WebhookDelete);
+  });
+
+  it("ignores non-webhook audit log actions", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          [
+            "entry-1",
+            fakeEntry({
+              action: AuditLogEvent.ChannelUpdate,
+              target: { channelId: "channel-1" }
+            })
+          ]
+        ])
+      })
+    });
+
+    const result = await lookupWebhookAuditLogAction(guild, "channel-1", { retries: 0 });
+
+    assert.equal(result.status, "not_found");
+    assert.equal(result.action, null);
+  });
+
+  it("ignores entries whose target channelId does not match", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          [
+            "entry-1",
+            fakeEntry({
+              action: AuditLogEvent.WebhookUpdate,
+              target: { channelId: "channel-2" }
+            })
+          ]
+        ])
+      })
+    });
+
+    const result = await lookupWebhookAuditLogAction(guild, "channel-1", { retries: 0 });
+
+    assert.equal(result.status, "not_found");
+    assert.equal(result.action, null);
+  });
+
+  it("returns error status when fetchAuditLogs throws", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => {
+        throw new Error("boom");
+      }
+    });
+
+    const result = await lookupWebhookAuditLogAction(guild, "channel-1", { retries: 0 });
+
+    assert.equal(result.status, "error");
+    assert.equal(result.action, null);
   });
 });
 

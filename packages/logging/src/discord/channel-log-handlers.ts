@@ -6,9 +6,10 @@ import {
   normalizeChannelCreate,
   normalizeChannelDelete,
   normalizeChannelUpdate,
-  normalizeWebhookUpdate
+  normalizeWebhookChange,
+  type WebhookChangeEventName
 } from "./channel-events.js";
-import { correlateWithAuditLog } from "./audit-log.js";
+import { applyAuditLog, correlateWithAuditLog, lookupWebhookAuditLogAction } from "./audit-log.js";
 
 export interface ChannelLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -73,14 +74,35 @@ export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLo
     },
 
     async onWebhooksUpdate(channel) {
-      // Discord Audit LogのWebhookUpdateエントリのtargetIdはwebhook自体のIDであり、
-      // WebhooksUpdateイベントから取得できるchannel.idとは一致しない
-      // (channel.permission_updateが相関対象外なのと同じ理由)。
-      // そのため相関を試みず、actorId: nullのまま記録する。
-      const event = normalizeWebhookUpdate(channel);
-      await writeSafely(deps, event);
+      // WebhooksUpdateは作成・更新・削除のいずれでも発火し、操作種別を直接示さない。
+      // Audit LogのWebhookUpdateエントリのtargetIdはwebhook自体のIDであり、
+      // WebhooksUpdateイベントから取得できるchannel.idとは一致しないため、
+      // targetIdでの相関ではなくchannelIdの一致でWebhookCreate/Update/Deleteの
+      // Audit Logエントリを探し、操作種別を判定する。
+      const event = normalizeWebhookChange(channel, "webhook.update");
+      const auditLog = await lookupWebhookAuditLogAction(channel.guild, channel.id, {
+        referenceTime: event.eventTimestamp
+      });
+      const correlated = applyAuditLog(
+        { ...event, eventName: webhookEventNameForAuditLogAction(auditLog.action) },
+        auditLog
+      );
+      await writeSafely(deps, correlated);
     }
   };
+}
+
+function webhookEventNameForAuditLogAction(
+  action: AuditLogEvent.WebhookCreate | AuditLogEvent.WebhookUpdate | AuditLogEvent.WebhookDelete | null
+): WebhookChangeEventName {
+  switch (action) {
+    case AuditLogEvent.WebhookCreate:
+      return "webhook.create";
+    case AuditLogEvent.WebhookDelete:
+      return "webhook.delete";
+    default:
+      return "webhook.update";
+  }
 }
 
 async function writeSafely(

@@ -6,7 +6,7 @@ import {
   normalizeChannelCreate,
   normalizeChannelDelete,
   normalizeChannelUpdate,
-  normalizeWebhookUpdate
+  normalizeWebhookChange
 } from "./channel-events.js";
 
 function fakeChannel(overrides: Record<string, unknown> = {}) {
@@ -110,13 +110,18 @@ describe("normalizeChannelUpdate", () => {
   });
 });
 
-describe("normalizeWebhookUpdate", () => {
+describe("normalizeWebhookChange", () => {
   it("normalizes a webhook update with no known actor", () => {
-    const event = normalizeWebhookUpdate(fakeChannel());
+    const event = normalizeWebhookChange(fakeChannel(), "webhook.update");
 
     assert.equal(event.eventName, "webhook.update");
     assert.equal(event.guildId, "guild-1");
     assert.equal(event.channelId, "channel-1");
     assert.equal(event.actorId, null);
+  });
+
+  it("normalizes with the given eventName (create/delete)", () => {
+    assert.equal(normalizeWebhookChange(fakeChannel(), "webhook.create").eventName, "webhook.create");
+    assert.equal(normalizeWebhookChange(fakeChannel(), "webhook.delete").eventName, "webhook.delete");
   });
 });
