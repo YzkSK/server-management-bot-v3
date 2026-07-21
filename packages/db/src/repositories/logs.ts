@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
 import type { NormalizedEvent } from "@sm-bot/shared";
 
 import type { DbClient } from "../client.js";
@@ -88,4 +88,23 @@ export async function getUnsyncedLogEvents(
     .limit(options.limit);
 
   return rows as UnsyncedLogEvent[];
+}
+
+export async function deleteLogEventsOlderThan(
+  db: DbClient,
+  options: { cutoff: Date; limit: number }
+): Promise<number> {
+  const targetIds = db
+    .select({ id: logs.id })
+    .from(logs)
+    .where(lt(logs.receivedAt, options.cutoff))
+    .orderBy(asc(logs.receivedAt), asc(logs.id))
+    .limit(options.limit);
+
+  const deleted = await db
+    .delete(logs)
+    .where(inArray(logs.id, targetIds))
+    .returning({ id: logs.id });
+
+  return deleted.length;
 }
