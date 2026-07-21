@@ -361,6 +361,21 @@ describe("fetchGuildMemberAccess", () => {
     );
   });
 
+  it("throws DiscordApiError when the member lookup responds 404 with a malformed (non-JSON) body", async () => {
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        return new Response("not json", { status: 404 });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    await assert.rejects(
+      () => fetchGuildMemberAccess({ botToken: BOT_TOKEN, guildId: GUILD_ID, userId: USER_ID }),
+      (error: unknown) => error instanceof DiscordApiError && error.status === 404
+    );
+  });
+
   it("does not retry on 404 (member left the guild)", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     let memberCallCount = 0;
