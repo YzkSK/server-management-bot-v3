@@ -18,6 +18,9 @@ import {
 
 export interface MessageLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
+  /** テスト用: 監査ログ未検出時の再試行回数/間隔を上書きする。未指定時はlookupAuditLogの既定値を使う。 */
+  auditLogRetries?: number;
+  auditLogRetryDelayMs?: number;
 }
 
 export interface MessageLogHandlers {
@@ -67,16 +70,13 @@ export function createMessageLogHandlers(
       // targetIdはchannelIdであり操作固有ではないため、同一チャンネルで短時間に複数のbulk
       // deleteが発生すると誤った操作の監査ログに相関しかねない。件数が一致する監査ログに
       // 絞り込み、なお候補が複数残る(=どちらか特定できない)場合はactorId/reasonを補完しない。
-      const auditLog = await lookupAuditLog(
-        channel.guild,
-        AuditLogEvent.MessageBulkDelete,
-        channel.id,
-        {
-          referenceTime: event.eventTimestamp,
-          entryFilter: (entry) => extractAuditLogEntryCount(entry.extra) === messages.size,
-          requireUnique: true
-        }
-      );
+      const auditLog = await lookupAuditLog(channel.guild, AuditLogEvent.MessageBulkDelete, channel.id, {
+        referenceTime: event.eventTimestamp,
+        entryFilter: (entry) => extractAuditLogEntryCount(entry.extra) === messages.size,
+        requireUnique: true,
+        ...(deps.auditLogRetries !== undefined ? { retries: deps.auditLogRetries } : {}),
+        ...(deps.auditLogRetryDelayMs !== undefined ? { retryDelayMs: deps.auditLogRetryDelayMs } : {})
+      });
       const correlated = applyAuditLog(event, auditLog);
       await writeSafely(deps, {
         ...correlated,

@@ -187,7 +187,11 @@ describe("createMessageLogHandlers", () => {
 
   it("does not correlate with an audit log entry whose count does not match the deleted message count", async () => {
     const writeLogEvent = fakeWriteLogEvent();
-    const handlers = createMessageLogHandlers({ writeLogEvent });
+    // 監査ログ候補が0件になるため、既定のretries(2回×300ms)による待機を避けてテストを高速化する。
+    const handlers = createMessageLogHandlers({
+      writeLogEvent,
+      auditLogRetries: 0
+    });
     const guild = grantedGuild(async () => ({
       entries: new Collection([
         [
