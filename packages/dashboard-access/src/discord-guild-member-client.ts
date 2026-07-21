@@ -7,6 +7,9 @@ const DISCORD_BACKOFF_BASE_MS = 250;
 const DISCORD_BACKOFF_MAX_MS = 4000;
 // Retry-Afterヘッダーが欠落・不正な場合のフォールバック待機時間。
 const DISCORD_DEFAULT_RETRY_AFTER_MS = 1000;
+// Discordが極端に大きいRetry-Afterを返してもtRPCリクエストを無期限に
+// 保持しないための上限(issue #122 codexレビュー指摘)。
+export const DISCORD_MAX_RETRY_AFTER_MS = 10_000;
 
 export class DiscordApiError extends Error {
   constructor(
@@ -51,7 +54,7 @@ function parseRetryAfterMs(response: Response): number {
   if (!Number.isFinite(seconds) || seconds < 0) {
     return DISCORD_DEFAULT_RETRY_AFTER_MS;
   }
-  return seconds * 1000;
+  return Math.min(seconds * 1000, DISCORD_MAX_RETRY_AFTER_MS);
 }
 
 function exponentialBackoffMs(attempt: number): number {
@@ -75,6 +78,8 @@ async function fetchWithRetry(url: string, botToken: string): Promise<Response> 
 
     const delayMs =
       response.status === 429 ? parseRetryAfterMs(response) : exponentialBackoffMs(attempt);
+    // 未消費のbodyを破棄し、リトライ時に接続を確実に解放する(issue #122 codexレビュー指摘)。
+    await response.body?.cancel();
     await sleep(delayMs);
   }
   // MAX_DISCORD_FETCH_ATTEMPTS >= 1 のため到達しないが、型のために必要。

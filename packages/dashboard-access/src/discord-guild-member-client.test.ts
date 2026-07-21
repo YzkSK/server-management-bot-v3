@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 
 import {
+  DISCORD_MAX_RETRY_AFTER_MS,
   DiscordApiError,
   fetchGuildMemberAccess,
   MAX_DISCORD_FETCH_ATTEMPTS
@@ -163,7 +164,82 @@ describe("fetchGuildMemberAccess", () => {
       userId: USER_ID
     });
     await flushMicrotasks();
-    t.mock.timers.tick(2000);
+    assert.equal(memberCallCount, 1);
+
+    t.mock.timers.tick(1_999);
+    await flushMicrotasks();
+    assert.equal(memberCallCount, 1);
+
+    t.mock.timers.tick(1);
+    await flushMicrotasks();
+
+    const result = await resultPromise;
+
+    assert.deepEqual(result, { roleIds: [GUILD_ID], isGuildOwner: false });
+    assert.equal(memberCallCount, 2);
+  });
+
+  it("falls back to a default wait when Retry-After is missing or invalid", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let memberCallCount = 0;
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        memberCallCount += 1;
+        if (memberCallCount === 1) {
+          return new Response(null, { status: 429 });
+        }
+        return jsonResponse(200, { roles: [] });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    const resultPromise = fetchGuildMemberAccess({
+      botToken: BOT_TOKEN,
+      guildId: GUILD_ID,
+      userId: USER_ID
+    });
+    await flushMicrotasks();
+    t.mock.timers.tick(999);
+    await flushMicrotasks();
+    assert.equal(memberCallCount, 1);
+
+    t.mock.timers.tick(1);
+    await flushMicrotasks();
+
+    const result = await resultPromise;
+
+    assert.deepEqual(result, { roleIds: [GUILD_ID], isGuildOwner: false });
+    assert.equal(memberCallCount, 2);
+  });
+
+  it("caps an excessively large Retry-After so it doesn't block the request indefinitely", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let memberCallCount = 0;
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        memberCallCount += 1;
+        if (memberCallCount === 1) {
+          return new Response(null, { status: 429, headers: { "Retry-After": "600" } });
+        }
+        return jsonResponse(200, { roles: [] });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    const resultPromise = fetchGuildMemberAccess({
+      botToken: BOT_TOKEN,
+      guildId: GUILD_ID,
+      userId: USER_ID
+    });
+    await flushMicrotasks();
+    t.mock.timers.tick(DISCORD_MAX_RETRY_AFTER_MS - 1);
+    await flushMicrotasks();
+    assert.equal(memberCallCount, 1);
+
+    t.mock.timers.tick(1);
+    await flushMicrotasks();
 
     const result = await resultPromise;
 
@@ -192,7 +268,12 @@ describe("fetchGuildMemberAccess", () => {
       userId: USER_ID
     });
     await flushMicrotasks();
-    t.mock.timers.tick(60_000);
+    t.mock.timers.tick(249);
+    await flushMicrotasks();
+    assert.equal(guildCallCount, 1);
+
+    t.mock.timers.tick(1);
+    await flushMicrotasks();
 
     const result = await resultPromise;
 
