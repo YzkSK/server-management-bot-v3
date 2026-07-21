@@ -32,8 +32,9 @@ describe("writeSafely", () => {
   });
 
   it("swallows errors from writeLogEvent and logs with the given source prefix", async () => {
+    const thrown = new Error("db down");
     const writeLogEvent = mock.fn(async () => {
-      throw new Error("db down");
+      throw thrown;
     });
     const consoleError = mock.method(console, "error", () => undefined);
 
@@ -45,6 +46,7 @@ describe("writeSafely", () => {
       assert.equal(message, "guild-log-handlers: failed to write log event");
       assert.equal((context as { eventName?: string }).eventName, "guild.update");
       assert.equal((context as { guildId?: string }).guildId, "guild-1");
+      assert.equal((context as { err?: unknown }).err, thrown);
     } finally {
       consoleError.mock.restore();
     }
