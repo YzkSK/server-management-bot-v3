@@ -40,6 +40,14 @@ interface DiscordGuildResponse {
   owner_id: string;
 }
 
+interface DiscordErrorResponse {
+  code?: number;
+}
+
+// Discord's Unknown Guild error code (guildId自体が存在しない設定ミス等)。
+// Unknown Member (10007) と区別して検知できるようにする(issue #123)。
+const DISCORD_UNKNOWN_GUILD_ERROR_CODE = 10004;
+
 function botAuthHeaders(botToken: string) {
   return { Authorization: `Bot ${botToken}` };
 }
@@ -100,6 +108,10 @@ export async function fetchGuildMemberAccess(
   ]);
 
   if (memberResponse.status === 404) {
+    const body = (await memberResponse.json().catch(() => null)) as DiscordErrorResponse | null;
+    if (body?.code === DISCORD_UNKNOWN_GUILD_ERROR_CODE) {
+      throw new DiscordApiError(`Unknown Discord guild (${input.guildId}).`, 404);
+    }
     return null;
   }
   if (!memberResponse.ok) {

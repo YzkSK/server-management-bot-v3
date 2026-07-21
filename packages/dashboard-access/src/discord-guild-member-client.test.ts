@@ -331,6 +331,39 @@ describe("fetchGuildMemberAccess", () => {
     assert.equal(memberCallCount, MAX_DISCORD_FETCH_ATTEMPTS);
   });
 
+  it("returns null when the member lookup responds 404 with code 10007 (Unknown Member)", async () => {
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        return jsonResponse(404, { message: "Unknown Member", code: 10007 });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    const result = await fetchGuildMemberAccess({
+      botToken: BOT_TOKEN,
+      guildId: GUILD_ID,
+      userId: USER_ID
+    });
+
+    assert.equal(result, null);
+  });
+
+  it("throws DiscordApiError when the member lookup responds 404 with code 10004 (Unknown Guild)", async () => {
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        return jsonResponse(404, { message: "Unknown Guild", code: 10004 });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    await assert.rejects(
+      () => fetchGuildMemberAccess({ botToken: BOT_TOKEN, guildId: GUILD_ID, userId: USER_ID }),
+      (error: unknown) => error instanceof DiscordApiError && error.status === 404
+    );
+  });
+
   it("does not retry on 404 (member left the guild)", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     let memberCallCount = 0;
