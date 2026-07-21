@@ -9,6 +9,7 @@ import { createDbConnection, type DbConnection } from "../client.js";
 import { guilds, logs } from "../schema/index.js";
 import { upsertGuild } from "./guilds.js";
 import {
+  deleteLogEventsOlderThan,
   getUnsyncedLogEvents,
   insertLogEvent,
   markLogEventStreamSynced
@@ -170,5 +171,67 @@ describe("markLogEventStreamSynced / getUnsyncedLogEvents", () => {
       limitedOwnRows.map((row) => row.id),
       [third.id]
     );
+  });
+});
+
+describe("deleteLogEventsOlderThan", () => {
+  let connection: DbConnection;
+
+  before(() => {
+    const databaseUrl = parseDatabaseEnv().DATABASE_URL;
+    assertLocalDatabase(databaseUrl);
+    connection = createDbConnection(databaseUrl);
+  });
+
+  after(async () => {
+    await connection.db.delete(logs).where(eq(logs.guildId, TEST_GUILD_ID));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, TEST_GUILD_ID));
+    await connection.close();
+  });
+
+  beforeEach(async () => {
+    await connection.db.delete(logs).where(eq(logs.guildId, TEST_GUILD_ID));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, TEST_GUILD_ID));
+    await connection.db.insert(guilds).values({ guildId: TEST_GUILD_ID });
+  });
+
+  it("deletes only rows older than the cutoff and returns the deleted count", async () => {
+    const old = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2020-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+    const recent = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date(),
+      payload: {}
+    });
+
+    const deleted = await deleteLogEventsOlderThan(connection.db, {
+      cutoff: new Date("2021-01-01T00:00:00.000Z"),
+      limit: 100
+    });
+
+    assert.ok(deleted >= 1);
+    const [oldRow] = await connection.db.select().from(logs).where(eq(logs.id, old.id));
+    assert.equal(oldRow, undefined);
+    const [recentRow] = await connection.db
+      .select()
+      .from(logs)
+      .where(eq(logs.id, recent.id));
+    assert.ok(recentRow);
+  });
+
+  it("respects the limit and returns 0 when nothing matches", async () => {
+    const deleted = await deleteLogEventsOlderThan(connection.db, {
+      cutoff: new Date("2000-01-01T00:00:00.000Z"),
+      limit: 100
+    });
+
+    assert.equal(deleted, 0);
   });
 });
