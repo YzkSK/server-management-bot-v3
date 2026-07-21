@@ -77,9 +77,8 @@ export async function backfillUnsyncedLogEvents(
   }
 
   const results = await mapWithConcurrency(rows, BACKFILL_CONCURRENCY, async (row) => {
-    const event = toNormalizedEvent(row);
-
     try {
+      const event = toNormalizedEvent(row);
       await Promise.all([
         appendLogEventToStream(deps.redis, event, { realtimeEnabled: row.realtimeEnabled }),
         row.realtimeEnabled
