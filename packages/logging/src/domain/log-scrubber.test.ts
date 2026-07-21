@@ -36,6 +36,26 @@ describe("scrubSensitiveStrings", () => {
     assert.equal(result.content, "Authorization: Bearer [REDACTED_TOKEN]");
   });
 
+  it("masks a token-like string that starts with '-' (including the leading '-')", () => {
+    const payload = {
+      content: "token: -abcdef.GaBcDe.AbCdEfGhIjKlMnOpQrStUvWxYz123456 end"
+    };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "token: [REDACTED_TOKEN] end");
+  });
+
+  it("masks a token-like string that ends with '-' (including the trailing '-')", () => {
+    const payload = {
+      content: "token: abcdef.GaBcDe.AbCdEfGhIjKlMnOpQrStUvWxYz123456- end"
+    };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "token: [REDACTED_TOKEN] end");
+  });
+
   it("masks a credit-card-like number with and without separators", () => {
     const payload = {
       content: "card 4111111111111111 or 4111-1111-1111-1111"
@@ -44,6 +64,16 @@ describe("scrubSensitiveStrings", () => {
     const result = scrubSensitiveStrings(payload);
 
     assert.equal(result.content, "card [REDACTED_CARD] or [REDACTED_CARD]");
+  });
+
+  it("masks an AMEX-style 15-digit card number grouped 4-6-5", () => {
+    // 378282246310005 は既知のLuhn有効なAMEXテスト用カード番号(区切りなしでも
+    // Luhnチェックサムを満たす)。
+    const payload = { content: "amex 3782 822463 10005 on file" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "amex [REDACTED_CARD] on file");
   });
 
   it("masks an IPv4 address", () => {

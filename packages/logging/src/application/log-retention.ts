@@ -18,6 +18,14 @@ export async function runLogRetentionCleanup(
 ): Promise<LogRetentionResult> {
   const retentionDays = options.retentionDays ?? DEFAULT_LOG_RETENTION_DAYS;
   const batchSize = options.batchSize ?? DEFAULT_RETENTION_BATCH_SIZE;
+
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
+    throw new RangeError(`batchSize must be a positive integer, got ${batchSize}`);
+  }
+  if (!Number.isInteger(retentionDays) || retentionDays < 1) {
+    throw new RangeError(`retentionDays must be a positive integer, got ${retentionDays}`);
+  }
+
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
 
   let totalDeleted = 0;

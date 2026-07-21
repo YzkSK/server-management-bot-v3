@@ -66,4 +66,28 @@ describe("runLogRetentionCleanup", () => {
     assert.equal(result.deleted, 0);
     assert.equal(deleteLogEventsOlderThan.mock.calls.length, 1);
   });
+
+  it("rejects when batchSize is 0 (would otherwise infinite-loop)", async () => {
+    const db = {} as DbClient;
+    const deleteLogEventsOlderThan = mock.fn<typeof DeleteLogEventsOlderThan>(async () => 0);
+
+    await assert.rejects(
+      () => runLogRetentionCleanup({ db, deleteLogEventsOlderThan }, { batchSize: 0 }),
+      RangeError
+    );
+  });
+
+  it("rejects when retentionDays is negative", async () => {
+    const db = {} as DbClient;
+    const deleteLogEventsOlderThan = mock.fn<typeof DeleteLogEventsOlderThan>(async () => 0);
+
+    await assert.rejects(
+      () =>
+        runLogRetentionCleanup(
+          { db, deleteLogEventsOlderThan },
+          { retentionDays: -1, batchSize: 10 }
+        ),
+      RangeError
+    );
+  });
 });
