@@ -342,7 +342,10 @@ describe("fetchGuildMemberAccess", () => {
 
     await assert.rejects(
       () => fetchGuildMemberAccess({ botToken: BOT_TOKEN, guildId: GUILD_ID, userId: USER_ID }),
-      (error: unknown) => error instanceof DiscordApiError && error.status === 404
+      (error: unknown) =>
+        error instanceof DiscordApiError &&
+        error.status === 404 &&
+        error.message === `Unknown Discord guild (${GUILD_ID}).`
     );
   });
 
@@ -357,7 +360,10 @@ describe("fetchGuildMemberAccess", () => {
 
     await assert.rejects(
       () => fetchGuildMemberAccess({ botToken: BOT_TOKEN, guildId: GUILD_ID, userId: USER_ID }),
-      (error: unknown) => error instanceof DiscordApiError && error.status === 404
+      (error: unknown) =>
+        error instanceof DiscordApiError &&
+        error.status === 404 &&
+        error.message === "Unexpected 404 from Discord guild member lookup (code: 99999)."
     );
   });
 
@@ -372,7 +378,10 @@ describe("fetchGuildMemberAccess", () => {
 
     await assert.rejects(
       () => fetchGuildMemberAccess({ botToken: BOT_TOKEN, guildId: GUILD_ID, userId: USER_ID }),
-      (error: unknown) => error instanceof DiscordApiError && error.status === 404
+      (error: unknown) =>
+        error instanceof DiscordApiError &&
+        error.status === 404 &&
+        error.message === "Unexpected 404 from Discord guild member lookup (code: unknown)."
     );
   });
 
