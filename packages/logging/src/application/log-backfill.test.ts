@@ -149,6 +149,38 @@ describe("backfillUnsyncedLogEvents", () => {
     }
   });
 
+  it("treats a normalization error as a failure for only that row", async () => {
+    const invalidRow = makeUnsyncedRow({ id: "log-invalid" });
+    Object.defineProperty(invalidRow, "payload", {
+      get() {
+        throw new Error("invalid payload");
+      }
+    });
+    const validRow = makeUnsyncedRow({ id: "log-valid" });
+    const getUnsyncedLogEvents = mock.fn<typeof GetUnsyncedLogEvents>(
+      async () => [invalidRow, validRow]
+    );
+    const markLogEventStreamSynced = mock.fn<typeof MarkLogEventStreamSynced>(async () => {});
+    const redis: RedisStreamWriter = { xAdd: async () => "1-0" };
+    const db = {} as DbClient;
+
+    const errorSpy = mock.method(console, "error", () => {});
+    try {
+      const result = await backfillUnsyncedLogEvents({
+        db,
+        redis,
+        getUnsyncedLogEvents,
+        markLogEventStreamSynced
+      });
+
+      assert.deepEqual(result, { synced: 1, failed: 1 });
+      assert.equal(markLogEventStreamSynced.mock.calls.length, 1);
+      assert.equal(markLogEventStreamSynced.mock.calls[0]?.arguments[1], "log-valid");
+    } finally {
+      errorSpy.mock.restore();
+    }
+  });
+
   it("caps in-flight row processing at the configured concurrency limit", async () => {
     const rows = Array.from({ length: 25 }, (_, i) => makeUnsyncedRow({ id: `log-${i}` }));
     const getUnsyncedLogEvents = mock.fn<typeof GetUnsyncedLogEvents>(async () => rows);
