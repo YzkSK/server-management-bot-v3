@@ -116,6 +116,54 @@ describe("scrubSensitiveStrings", () => {
     assert.equal(result.content, "loopback [REDACTED_IP] responded");
   });
 
+  it("masks an IPv4-mapped IPv6 address (::ffff:192.0.2.128) without leaking the suffix", () => {
+    const payload = { content: "client at ::ffff:192.0.2.128 connected" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "client at [REDACTED_IP] connected");
+  });
+
+  it("masks an IPv4-embedded IPv6 address (2001:db8::192.0.2.1) without leaking the suffix", () => {
+    const payload = { content: "client at 2001:db8::192.0.2.1 connected" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "client at [REDACTED_IP] connected");
+  });
+
+  it("masks a full-form (non-compressed) IPv4-mapped IPv6 address (1:2:3:4:5:6:192.0.2.1)", () => {
+    const payload = { content: "client at 1:2:3:4:5:6:192.0.2.1 connected" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "client at [REDACTED_IP] connected");
+  });
+
+  it("masks a bare '::' IPv4-mapped address (::192.0.2.1)", () => {
+    const payload = { content: "client at ::192.0.2.1 connected" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "client at [REDACTED_IP] connected");
+  });
+
+  it("masks an IPv4-embedded IPv6 address with an extra segment before the suffix (2001:db8::1:192.0.2.1)", () => {
+    const payload = { content: "client at 2001:db8::1:192.0.2.1 connected" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "client at [REDACTED_IP] connected");
+  });
+
+  it("masks a bracketed IPv4-mapped IPv6 address with a port ([::ffff:192.0.2.128]:443)", () => {
+    const payload = { content: "client at [::ffff:192.0.2.128]:443 connected" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "client at [[REDACTED_IP]]:443 connected");
+  });
+
   it("does not mask a Discord snowflake ID inside a mention (fails Luhn check)", () => {
     // 123456789012345678 は18桁でスノーフレークID形状の候補に該当するが、
     // Luhnチェックサムを満たさない(node .superpowers/sdd/luhn-check.js で検証済み、

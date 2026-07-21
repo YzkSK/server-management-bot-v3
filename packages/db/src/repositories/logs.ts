@@ -94,24 +94,16 @@ export async function deleteLogEventsOlderThan(
   db: DbClient,
   options: { cutoff: Date; limit: number }
 ): Promise<number> {
-  const rows = await db
+  const targetIds = db
     .select({ id: logs.id })
     .from(logs)
     .where(lt(logs.receivedAt, options.cutoff))
+    .orderBy(asc(logs.receivedAt), asc(logs.id))
     .limit(options.limit);
-
-  if (rows.length === 0) {
-    return 0;
-  }
 
   const deleted = await db
     .delete(logs)
-    .where(
-      inArray(
-        logs.id,
-        rows.map((row) => row.id)
-      )
-    )
+    .where(inArray(logs.id, targetIds))
     .returning({ id: logs.id });
 
   return deleted.length;

@@ -56,6 +56,25 @@ const IPV6_PATTERN = new RegExp(
   "g"
 );
 
+const IPV4_PART =
+  "(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)";
+
+// `::ffff:192.0.2.128`(IPv4射影)や`2001:db8::192.0.2.1`(IPv4埋め込み)のように、
+// 末尾がIPv4ドット表記になっているIPv6アドレス。上のIPV6_PATTERNは末尾を16進
+// グループとしてしか認識しないため、これらは`::ffff:192`のように部分一致し、
+// 残りのIPv4部分(`.0.2.128`)が平文のまま残ってしまう。そのため、この専用
+// パターンをIPV6_PATTERN/IPV4_PATTERNより先に適用し、アドレス全体を1回でマスクする。
+const IPV4_MAPPED_IPV6_PATTERN = new RegExp(
+  "(?<![:\\w.])(?:" +
+    `(?:${IPV6_SEGMENT}:){6}${IPV4_PART}` +
+    "|" +
+    `::(?:${IPV6_SEGMENT}:){0,5}${IPV4_PART}` +
+    "|" +
+    `(?:${IPV6_SEGMENT}:){1,5}:(?:${IPV6_SEGMENT}:)?${IPV4_PART}` +
+    ")(?![:\\w.])",
+  "g"
+);
+
 // 標準的なLuhnアルゴリズム: 右端から数えて偶数番目(0始まりで奇数インデックス)の
 // 桁を2倍し、9を超えたら9を引いてから全桁を合計する。合計が10で割り切れれば有効。
 function isValidLuhn(digits: string): boolean {
@@ -84,6 +103,7 @@ function scrubString(value: string): string {
   return value
     .replace(BEARER_TOKEN_PATTERN, "Bearer [REDACTED_TOKEN]")
     .replace(TOKEN_LIKE_PATTERN, "[REDACTED_TOKEN]")
+    .replace(IPV4_MAPPED_IPV6_PATTERN, "[REDACTED_IP]")
     .replace(IPV6_PATTERN, "[REDACTED_IP]")
     .replace(IPV4_PATTERN, "[REDACTED_IP]")
     .replace(CREDIT_CARD_CANDIDATE_PATTERN, maskCreditCardCandidate);

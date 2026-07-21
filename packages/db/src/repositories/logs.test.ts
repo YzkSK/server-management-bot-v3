@@ -234,4 +234,34 @@ describe("deleteLogEventsOlderThan", () => {
 
     assert.equal(deleted, 0);
   });
+
+  it("deletes only up to the limit, leaving the remaining expired rows", async () => {
+    const first = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2020-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+    const second = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2020-01-02T00:00:00.000Z"),
+      payload: {}
+    });
+
+    const deleted = await deleteLogEventsOlderThan(connection.db, {
+      cutoff: new Date("2021-01-01T00:00:00.000Z"),
+      limit: 1
+    });
+
+    assert.equal(deleted, 1);
+    const remaining = await connection.db
+      .select()
+      .from(logs)
+      .where(eq(logs.guildId, TEST_GUILD_ID));
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0]?.id, second.id);
+  });
 });
