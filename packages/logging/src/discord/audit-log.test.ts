@@ -29,6 +29,7 @@ function fakeEntry(overrides: Record<string, unknown> = {}) {
     action: AuditLogEvent.ChannelDelete,
     targetId: "target-1",
     target: null,
+    changes: [],
     executorId: "actor-1",
     executor: null,
     reason: null,
@@ -291,6 +292,28 @@ describe("lookupWebhookAuditLogAction", () => {
             fakeEntry({
               action: AuditLogEvent.WebhookDelete,
               target: { channelId: "channel-1" }
+            })
+          ]
+        ])
+      })
+    });
+
+    const result = await lookupWebhookAuditLogAction(guild, "channel-1", { retries: 0 });
+
+    assert.equal(result.status, "matched");
+    assert.equal(result.action, AuditLogEvent.WebhookDelete);
+  });
+
+  it("matches a WebhookDelete entry via changes[].channel_id when target has no channelId", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          [
+            "entry-1",
+            fakeEntry({
+              action: AuditLogEvent.WebhookDelete,
+              target: { id: "webhook-1" },
+              changes: [{ key: "channel_id", old: "channel-1" }]
             })
           ]
         ])

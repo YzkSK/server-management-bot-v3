@@ -45,6 +45,7 @@ function auditLogEntry(overrides: Record<string, unknown> = {}) {
     id: "entry-1",
     targetId: "channel-1",
     target: null,
+    changes: [],
     executorId: "actor-1",
     executor: null,
     reason: null,

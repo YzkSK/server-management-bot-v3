@@ -259,7 +259,7 @@ function findClosestMatchingWebhookAuditLogEntry(
       continue;
     }
 
-    if (getWebhookTargetChannelId(entry.target) !== channelId) {
+    if (getWebhookEntryChannelId(entry) !== channelId) {
       continue;
     }
 
@@ -270,6 +270,24 @@ function findClosestMatchingWebhookAuditLogEntry(
   }
 
   return closest;
+}
+
+/**
+ * WebhookDeleteではtarget_idに対応するwebhookが既にキャッシュから失われ、
+ * entry.targetがchannelIdを持たないことがあるため、entry.changesのchannel_id変更
+ * (削除前スナップショットとして残る)もフォールバックとして参照する。
+ */
+function getWebhookEntryChannelId(entry: GuildAuditLogsEntry): string | null {
+  const targetChannelId = getWebhookTargetChannelId(entry.target);
+
+  if (targetChannelId) {
+    return targetChannelId;
+  }
+
+  const channelIdChange = entry.changes.find((change) => change.key === "channel_id");
+  const channelIdValue = channelIdChange?.new ?? channelIdChange?.old;
+
+  return typeof channelIdValue === "string" ? channelIdValue : null;
 }
 
 function getWebhookTargetChannelId(target: unknown): string | null {
