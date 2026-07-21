@@ -86,7 +86,7 @@ describe("fetchGuildMemberAccess", () => {
     mock.method(globalThis, "fetch", async (input: string | URL) => {
       const url = input.toString();
       if (url.includes("/members/")) {
-        return jsonResponse(404, { message: "Unknown Member" });
+        return jsonResponse(404, { message: "Unknown Member", code: 10007 });
       }
       return jsonResponse(200, { owner_id: "someone-else" });
     });
@@ -331,6 +331,60 @@ describe("fetchGuildMemberAccess", () => {
     assert.equal(memberCallCount, MAX_DISCORD_FETCH_ATTEMPTS);
   });
 
+  it("throws DiscordApiError when the member lookup responds 404 with code 10004 (Unknown Guild)", async () => {
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        return jsonResponse(404, { message: "Unknown Guild", code: 10004 });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    await assert.rejects(
+      () => fetchGuildMemberAccess({ botToken: BOT_TOKEN, guildId: GUILD_ID, userId: USER_ID }),
+      (error: unknown) =>
+        error instanceof DiscordApiError &&
+        error.status === 404 &&
+        error.message === `Unknown Discord guild (${GUILD_ID}).`
+    );
+  });
+
+  it("throws DiscordApiError when the member lookup responds 404 with an unrecognized code", async () => {
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        return jsonResponse(404, { message: "Something Else", code: 99999 });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    await assert.rejects(
+      () => fetchGuildMemberAccess({ botToken: BOT_TOKEN, guildId: GUILD_ID, userId: USER_ID }),
+      (error: unknown) =>
+        error instanceof DiscordApiError &&
+        error.status === 404 &&
+        error.message === "Unexpected 404 from Discord guild member lookup (code: 99999)."
+    );
+  });
+
+  it("throws DiscordApiError when the member lookup responds 404 with a malformed (non-JSON) body", async () => {
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        return new Response("not json", { status: 404 });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    await assert.rejects(
+      () => fetchGuildMemberAccess({ botToken: BOT_TOKEN, guildId: GUILD_ID, userId: USER_ID }),
+      (error: unknown) =>
+        error instanceof DiscordApiError &&
+        error.status === 404 &&
+        error.message === "Unexpected 404 from Discord guild member lookup (code: unknown)."
+    );
+  });
+
   it("does not retry on 404 (member left the guild)", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     let memberCallCount = 0;
@@ -338,7 +392,7 @@ describe("fetchGuildMemberAccess", () => {
       const url = input.toString();
       if (url.includes("/members/")) {
         memberCallCount += 1;
-        return jsonResponse(404, { message: "Unknown Member" });
+        return jsonResponse(404, { message: "Unknown Member", code: 10007 });
       }
       return jsonResponse(200, { owner_id: "someone-else" });
     });

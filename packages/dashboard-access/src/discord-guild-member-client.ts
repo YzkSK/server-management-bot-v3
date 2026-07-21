@@ -40,6 +40,16 @@ interface DiscordGuildResponse {
   owner_id: string;
 }
 
+interface DiscordErrorResponse {
+  code?: number;
+}
+
+// メンバー脱退済み(既知のケースのみnullを返す)。それ以外の404
+// (guildId設定ミスのUnknown Guildや未知のcode)はDiscordApiErrorとして
+// 投げ、サイレントに握り潰さないようにする(issue #123)。
+const DISCORD_UNKNOWN_MEMBER_ERROR_CODE = 10007;
+const DISCORD_UNKNOWN_GUILD_ERROR_CODE = 10004;
+
 function botAuthHeaders(botToken: string) {
   return { Authorization: `Bot ${botToken}` };
 }
@@ -100,7 +110,17 @@ export async function fetchGuildMemberAccess(
   ]);
 
   if (memberResponse.status === 404) {
-    return null;
+    const body = (await memberResponse.json().catch(() => null)) as DiscordErrorResponse | null;
+    if (body?.code === DISCORD_UNKNOWN_MEMBER_ERROR_CODE) {
+      return null;
+    }
+    if (body?.code === DISCORD_UNKNOWN_GUILD_ERROR_CODE) {
+      throw new DiscordApiError(`Unknown Discord guild (${input.guildId}).`, 404);
+    }
+    throw new DiscordApiError(
+      `Unexpected 404 from Discord guild member lookup (code: ${body?.code ?? "unknown"}).`,
+      404
+    );
   }
   if (!memberResponse.ok) {
     throw new DiscordApiError(
