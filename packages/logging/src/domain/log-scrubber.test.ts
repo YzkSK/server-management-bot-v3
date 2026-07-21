@@ -62,6 +62,33 @@ describe("scrubSensitiveStrings", () => {
     assert.equal(result.content, "server at [REDACTED_IP]");
   });
 
+  it("masks a :: compressed IPv6 address that does not start with '::' (2001:db8::1)", () => {
+    const payload = { content: "addr 2001:db8::1 here" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "addr [REDACTED_IP] here");
+  });
+
+  it("masks a :: compressed IPv6 address (fe80::1)", () => {
+    const payload = { content: "server at fe80::1 responded" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "server at [REDACTED_IP] responded");
+  });
+
+  it("does not mask a Discord snowflake ID inside a mention (fails Luhn check)", () => {
+    // 123456789012345678 は18桁でスノーフレークID形状の候補に該当するが、
+    // Luhnチェックサムを満たさない(node .superpowers/sdd/luhn-check.js で検証済み、
+    // isValidLuhn("123456789012345678") === false)。カード番号と誤検出しないことを確認する。
+    const payload = { content: "ping <@123456789012345678> please" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "ping <@123456789012345678> please");
+  });
+
   it("recurses into nested objects and arrays", () => {
     const payload = {
       embeds: [
