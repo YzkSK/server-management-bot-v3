@@ -240,6 +240,59 @@ describe("lookupAuditLog", () => {
     assert.equal(result.status, "error");
     assert.equal((result.payload as { message: string }).message, "boom");
   });
+
+  it("applies entryFilter to exclude non-matching entries before selecting the closest", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          ["entry-1", fakeEntry({ id: "entry-1", executorId: "actor-1", reason: "wrong-count" })]
+        ])
+      })
+    });
+
+    const result = await lookupAuditLog(guild, AuditLogEvent.ChannelDelete, "target-1", {
+      entryFilter: () => false
+    });
+
+    assert.equal(result.status, "not_found");
+  });
+
+  it("returns not_found (without picking a candidate) when requireUnique and multiple entries match", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          ["entry-1", fakeEntry({ id: "entry-1", executorId: "actor-1" })],
+          ["entry-2", fakeEntry({ id: "entry-2", executorId: "actor-2" })]
+        ])
+      })
+    });
+
+    const result = await lookupAuditLog(guild, AuditLogEvent.ChannelDelete, "target-1", {
+      requireUnique: true
+    });
+
+    assert.equal(result.status, "not_found");
+    assert.equal(result.actorId, null);
+  });
+
+  it("matches when requireUnique is set but only one entry survives entryFilter", async () => {
+    const guild = fakeGuild({
+      fetchAuditLogs: async () => ({
+        entries: new Collection([
+          ["entry-1", fakeEntry({ id: "entry-1", executorId: "actor-1", extra: { count: 3 } })],
+          ["entry-2", fakeEntry({ id: "entry-2", executorId: "actor-2", extra: { count: 9 } })]
+        ])
+      })
+    });
+
+    const result = await lookupAuditLog(guild, AuditLogEvent.ChannelDelete, "target-1", {
+      requireUnique: true,
+      entryFilter: (entry) => (entry.extra as { count: number }).count === 3
+    });
+
+    assert.equal(result.status, "matched");
+    assert.equal(result.actorId, "actor-1");
+  });
 });
 
 describe("lookupWebhookAuditLogAction", () => {
