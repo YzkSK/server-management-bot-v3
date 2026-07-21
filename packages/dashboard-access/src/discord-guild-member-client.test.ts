@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 
-import { DiscordApiError, fetchGuildMemberAccess } from "./discord-guild-member-client.js";
+import {
+  DiscordApiError,
+  fetchGuildMemberAccess,
+  MAX_DISCORD_FETCH_ATTEMPTS
+} from "./discord-guild-member-client.js";
+
+async function flushMicrotasks(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve));
+}
 
 const BOT_TOKEN = "bot-token";
 const GUILD_ID = "guild-1";
@@ -91,7 +99,8 @@ describe("fetchGuildMemberAccess", () => {
     assert.equal(result, null);
   });
 
-  it("throws DiscordApiError when the member lookup fails with a non-404 error", async () => {
+  it("throws DiscordApiError when the member lookup fails with a non-404 error", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
     mock.method(globalThis, "fetch", async (input: string | URL) => {
       const url = input.toString();
       if (url.includes("/members/")) {
@@ -100,13 +109,25 @@ describe("fetchGuildMemberAccess", () => {
       return jsonResponse(200, { owner_id: "someone-else" });
     });
 
-    await assert.rejects(
-      () => fetchGuildMemberAccess({ botToken: BOT_TOKEN, guildId: GUILD_ID, userId: USER_ID }),
+    const resultPromise = fetchGuildMemberAccess({
+      botToken: BOT_TOKEN,
+      guildId: GUILD_ID,
+      userId: USER_ID
+    });
+    const assertionPromise = assert.rejects(
+      () => resultPromise,
       (error: unknown) => error instanceof DiscordApiError && error.status === 500
     );
+
+    for (let i = 0; i < MAX_DISCORD_FETCH_ATTEMPTS; i += 1) {
+      await flushMicrotasks();
+      t.mock.timers.tick(60_000);
+    }
+
+    await assertionPromise;
   });
 
-  it("throws DiscordApiError when the guild owner lookup fails", async () => {
+  it("throws DiscordApiError immediately without retrying when the guild owner lookup fails with a non-retryable 4xx", async () => {
     mock.method(globalThis, "fetch", async (input: string | URL) => {
       const url = input.toString();
       if (url.includes("/members/")) {
@@ -119,5 +140,116 @@ describe("fetchGuildMemberAccess", () => {
       () => fetchGuildMemberAccess({ botToken: BOT_TOKEN, guildId: GUILD_ID, userId: USER_ID }),
       (error: unknown) => error instanceof DiscordApiError && error.status === 403
     );
+  });
+
+  it("retries the member lookup after a 429 response, honoring Retry-After, and succeeds", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let memberCallCount = 0;
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        memberCallCount += 1;
+        if (memberCallCount === 1) {
+          return new Response(null, { status: 429, headers: { "Retry-After": "2" } });
+        }
+        return jsonResponse(200, { roles: [] });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    const resultPromise = fetchGuildMemberAccess({
+      botToken: BOT_TOKEN,
+      guildId: GUILD_ID,
+      userId: USER_ID
+    });
+    await flushMicrotasks();
+    t.mock.timers.tick(2000);
+
+    const result = await resultPromise;
+
+    assert.deepEqual(result, { roleIds: [GUILD_ID], isGuildOwner: false });
+    assert.equal(memberCallCount, 2);
+  });
+
+  it("retries the guild lookup on 5xx with backoff and succeeds", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let guildCallCount = 0;
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        return jsonResponse(200, { roles: [] });
+      }
+      guildCallCount += 1;
+      if (guildCallCount === 1) {
+        return jsonResponse(502, { message: "Bad Gateway" });
+      }
+      return jsonResponse(200, { owner_id: USER_ID });
+    });
+
+    const resultPromise = fetchGuildMemberAccess({
+      botToken: BOT_TOKEN,
+      guildId: GUILD_ID,
+      userId: USER_ID
+    });
+    await flushMicrotasks();
+    t.mock.timers.tick(60_000);
+
+    const result = await resultPromise;
+
+    assert.deepEqual(result, { roleIds: [GUILD_ID], isGuildOwner: true });
+    assert.equal(guildCallCount, 2);
+  });
+
+  it("gives up and throws DiscordApiError after exhausting retries on persistent 5xx", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let memberCallCount = 0;
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        memberCallCount += 1;
+        return jsonResponse(503, { message: "Service Unavailable" });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    const resultPromise = fetchGuildMemberAccess({
+      botToken: BOT_TOKEN,
+      guildId: GUILD_ID,
+      userId: USER_ID
+    });
+    const assertionPromise = assert.rejects(
+      () => resultPromise,
+      (error: unknown) => error instanceof DiscordApiError && error.status === 503
+    );
+
+    for (let i = 0; i < MAX_DISCORD_FETCH_ATTEMPTS; i += 1) {
+      await flushMicrotasks();
+      t.mock.timers.tick(60_000);
+    }
+
+    await assertionPromise;
+    assert.equal(memberCallCount, MAX_DISCORD_FETCH_ATTEMPTS);
+  });
+
+  it("does not retry on 404 (member left the guild)", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let memberCallCount = 0;
+    mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = input.toString();
+      if (url.includes("/members/")) {
+        memberCallCount += 1;
+        return jsonResponse(404, { message: "Unknown Member" });
+      }
+      return jsonResponse(200, { owner_id: "someone-else" });
+    });
+
+    const result = await fetchGuildMemberAccess({
+      botToken: BOT_TOKEN,
+      guildId: GUILD_ID,
+      userId: USER_ID
+    });
+
+    assert.equal(result, null);
+    assert.equal(memberCallCount, 1);
   });
 });

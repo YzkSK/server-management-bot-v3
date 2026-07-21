@@ -1,6 +1,13 @@
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_API_TIMEOUT_MS = 5000;
 
+// 初回リクエスト + リトライ2回。429/5xxが続く場合はこの回数で諦める。
+export const MAX_DISCORD_FETCH_ATTEMPTS = 3;
+const DISCORD_BACKOFF_BASE_MS = 250;
+const DISCORD_BACKOFF_MAX_MS = 4000;
+// Retry-Afterヘッダーが欠落・不正な場合のフォールバック待機時間。
+const DISCORD_DEFAULT_RETRY_AFTER_MS = 1000;
+
 export class DiscordApiError extends Error {
   constructor(
     message: string,
@@ -34,20 +41,57 @@ function botAuthHeaders(botToken: string) {
   return { Authorization: `Bot ${botToken}` };
 }
 
+function sleep(ms: number): Promise<void> {
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
+function parseRetryAfterMs(response: Response): number {
+  const header = response.headers.get("Retry-After");
+  const seconds = header === null ? Number.NaN : Number(header);
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return DISCORD_DEFAULT_RETRY_AFTER_MS;
+  }
+  return seconds * 1000;
+}
+
+function exponentialBackoffMs(attempt: number): number {
+  return Math.min(DISCORD_BACKOFF_BASE_MS * 2 ** attempt, DISCORD_BACKOFF_MAX_MS);
+}
+
+// 429はRetry-Afterに従い、5xxは上限付き指数バックオフでリトライする
+// (issue #122)。404や他の4xxはリトライ対象外で即座に返す。
+async function fetchWithRetry(url: string, botToken: string): Promise<Response> {
+  let response: Response;
+  for (let attempt = 0; attempt < MAX_DISCORD_FETCH_ATTEMPTS; attempt += 1) {
+    response = await fetch(url, {
+      headers: botAuthHeaders(botToken),
+      signal: AbortSignal.timeout(DISCORD_API_TIMEOUT_MS)
+    });
+
+    const isRetryable = response.status === 429 || response.status >= 500;
+    if (!isRetryable || attempt === MAX_DISCORD_FETCH_ATTEMPTS - 1) {
+      return response;
+    }
+
+    const delayMs =
+      response.status === 429 ? parseRetryAfterMs(response) : exponentialBackoffMs(attempt);
+    await sleep(delayMs);
+  }
+  // MAX_DISCORD_FETCH_ATTEMPTS >= 1 のため到達しないが、型のために必要。
+  return response!;
+}
+
 // Discord's member endpoint doesn't expose owner status, so the guild is
 // fetched in parallel to compare owner_id against the caller.
 export async function fetchGuildMemberAccess(
   input: FetchGuildMemberAccessInput
 ): Promise<DiscordGuildMemberAccess | null> {
   const [memberResponse, guildResponse] = await Promise.all([
-    fetch(`${DISCORD_API_BASE_URL}/guilds/${input.guildId}/members/${input.userId}`, {
-      headers: botAuthHeaders(input.botToken),
-      signal: AbortSignal.timeout(DISCORD_API_TIMEOUT_MS)
-    }),
-    fetch(`${DISCORD_API_BASE_URL}/guilds/${input.guildId}`, {
-      headers: botAuthHeaders(input.botToken),
-      signal: AbortSignal.timeout(DISCORD_API_TIMEOUT_MS)
-    })
+    fetchWithRetry(
+      `${DISCORD_API_BASE_URL}/guilds/${input.guildId}/members/${input.userId}`,
+      input.botToken
+    ),
+    fetchWithRetry(`${DISCORD_API_BASE_URL}/guilds/${input.guildId}`, input.botToken)
   ]);
 
   if (memberResponse.status === 404) {
