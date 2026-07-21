@@ -7,6 +7,7 @@ import {
   normalizeAutoModRuleDelete,
   normalizeAutoModRuleUpdate
 } from "./automod-events.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface AutoModLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -22,31 +23,19 @@ export interface AutoModLogHandlers {
 export function createAutoModLogHandlers(deps: AutoModLogHandlerDeps): AutoModLogHandlers {
   return {
     async onRuleCreate(rule) {
-      await writeSafely(deps, normalizeAutoModRuleCreate(rule));
+      await writeSafely(deps, normalizeAutoModRuleCreate(rule), "automod-log-handlers");
     },
 
     async onRuleUpdate(oldRule, newRule) {
-      await writeSafely(deps, normalizeAutoModRuleUpdate(oldRule, newRule));
+      await writeSafely(deps, normalizeAutoModRuleUpdate(oldRule, newRule), "automod-log-handlers");
     },
 
     async onRuleDelete(rule) {
-      await writeSafely(deps, normalizeAutoModRuleDelete(rule));
+      await writeSafely(deps, normalizeAutoModRuleDelete(rule), "automod-log-handlers");
     },
 
     async onActionExecution(execution) {
-      await writeSafely(deps, normalizeAutoModAction(execution));
+      await writeSafely(deps, normalizeAutoModAction(execution), "automod-log-handlers");
     }
   };
-}
-
-async function writeSafely(deps: AutoModLogHandlerDeps, event: NormalizedEvent): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("automod-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
-  }
 }

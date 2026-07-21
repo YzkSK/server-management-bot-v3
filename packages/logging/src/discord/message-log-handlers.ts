@@ -15,6 +15,7 @@ import {
   normalizeMessageUpdate,
   shouldSkipMessageLog
 } from "./message-events.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface MessageLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -44,7 +45,7 @@ export function createMessageLogHandlers(
       if (shouldSkipMessageLog(message)) {
         return;
       }
-      await writeSafely(deps, normalizeMessageCreate(message));
+      await writeSafely(deps, normalizeMessageCreate(message), "message-log-handlers");
     },
 
     async onMessageUpdate(oldMessage, newMessage) {
@@ -55,14 +56,14 @@ export function createMessageLogHandlers(
       if (!event) {
         return;
       }
-      await writeSafely(deps, event);
+      await writeSafely(deps, event, "message-log-handlers");
     },
 
     async onMessageDelete(message) {
       if (shouldSkipMessageLog(message)) {
         return;
       }
-      await writeSafely(deps, normalizeMessageDelete(message));
+      await writeSafely(deps, normalizeMessageDelete(message), "message-log-handlers");
     },
 
     async onMessageBulkDelete(messages, channel) {
@@ -78,10 +79,14 @@ export function createMessageLogHandlers(
         ...(deps.auditLogRetryDelayMs !== undefined ? { retryDelayMs: deps.auditLogRetryDelayMs } : {})
       });
       const correlated = applyAuditLog(event, auditLog);
-      await writeSafely(deps, {
-        ...correlated,
-        payload: { ...correlated.payload, reason: auditLog.reason }
-      });
+      await writeSafely(
+        deps,
+        {
+          ...correlated,
+          payload: { ...correlated.payload, reason: auditLog.reason }
+        },
+        "message-log-handlers"
+      );
     }
   };
 }
@@ -93,19 +98,4 @@ function extractAuditLogEntryCount(extra: unknown): number | null {
 
   const count = (extra as { count?: unknown }).count;
   return typeof count === "number" ? count : null;
-}
-
-async function writeSafely(
-  deps: MessageLogHandlerDeps,
-  event: NormalizedEvent
-): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("message-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
-  }
 }

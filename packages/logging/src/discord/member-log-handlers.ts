@@ -9,6 +9,7 @@ import {
   normalizeMemberUpdate
 } from "./member-events.js";
 import { correlateWithAuditLog, lookupAuditLog, applyAuditLog } from "./audit-log.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface MemberLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -84,7 +85,7 @@ export function createMemberLogHandlers(deps: MemberLogHandlerDeps): MemberLogHa
 
   return {
     async onGuildMemberAdd(member) {
-      await writeSafely(deps, normalizeMemberJoin(member));
+      await writeSafely(deps, normalizeMemberJoin(member), "member-log-handlers");
     },
 
     async onGuildMemberRemove(member) {
@@ -104,11 +105,15 @@ export function createMemberLogHandlers(deps: MemberLogHandlerDeps): MemberLogHa
       });
       if (kickLog.status === "matched") {
         // マッチした場合のみ、キック実行者付きのmember.kickとして記録する。
-        await writeSafely(deps, applyAuditLog({ ...event, eventName: "member.kick" }, kickLog));
+        await writeSafely(
+          deps,
+          applyAuditLog({ ...event, eventName: "member.kick" }, kickLog),
+          "member-log-handlers"
+        );
         return;
       }
 
-      await writeSafely(deps, applyAuditLog(event, kickLog));
+      await writeSafely(deps, applyAuditLog(event, kickLog), "member-log-handlers");
     },
 
     async onGuildMemberUpdate(oldMember, newMember) {
@@ -121,7 +126,7 @@ export function createMemberLogHandlers(deps: MemberLogHandlerDeps): MemberLogHa
       const action =
         "roles" in changes ? AuditLogEvent.MemberRoleUpdate : AuditLogEvent.MemberUpdate;
       const correlated = await correlateWithAuditLog(event, newMember.guild, action, newMember.id);
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "member-log-handlers");
     },
 
     async onGuildBanAdd(ban) {
@@ -133,7 +138,7 @@ export function createMemberLogHandlers(deps: MemberLogHandlerDeps): MemberLogHa
         AuditLogEvent.MemberBanAdd,
         ban.user.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "member-log-handlers");
     },
 
     async onGuildBanRemove(ban) {
@@ -144,22 +149,7 @@ export function createMemberLogHandlers(deps: MemberLogHandlerDeps): MemberLogHa
         AuditLogEvent.MemberBanRemove,
         ban.user.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "member-log-handlers");
     }
   };
-}
-
-async function writeSafely(
-  deps: MemberLogHandlerDeps,
-  event: NormalizedEvent
-): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("member-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
-  }
 }

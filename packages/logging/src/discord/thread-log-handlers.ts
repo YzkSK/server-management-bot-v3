@@ -7,6 +7,7 @@ import {
   normalizeThreadUpdate
 } from "./thread-events.js";
 import { correlateWithAuditLog } from "./audit-log.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface ThreadLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -34,7 +35,7 @@ export function createThreadLogHandlers(deps: ThreadLogHandlerDeps): ThreadLogHa
         AuditLogEvent.ThreadCreate,
         thread.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "thread-log-handlers");
     },
 
     async onThreadDelete(thread) {
@@ -45,7 +46,7 @@ export function createThreadLogHandlers(deps: ThreadLogHandlerDeps): ThreadLogHa
         AuditLogEvent.ThreadDelete,
         thread.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "thread-log-handlers");
     },
 
     async onThreadUpdate(oldThread, newThread) {
@@ -59,19 +60,7 @@ export function createThreadLogHandlers(deps: ThreadLogHandlerDeps): ThreadLogHa
         AuditLogEvent.ThreadUpdate,
         newThread.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "thread-log-handlers");
     }
   };
-}
-
-async function writeSafely(deps: ThreadLogHandlerDeps, event: NormalizedEvent): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("thread-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
-  }
 }
