@@ -156,6 +156,14 @@ describe("scrubSensitiveStrings", () => {
     assert.equal(result.content, "client at [REDACTED_IP] connected");
   });
 
+  it("masks an IPv4-embedded IPv6 address with multiple segments after '::' (2001:db8::1:2:192.0.2.1)", () => {
+    const payload = { content: "client at 2001:db8::1:2:192.0.2.1 connected" };
+
+    const result = scrubSensitiveStrings(payload);
+
+    assert.equal(result.content, "client at [REDACTED_IP] connected");
+  });
+
   it("masks a bracketed IPv4-mapped IPv6 address with a port ([::ffff:192.0.2.128]:443)", () => {
     const payload = { content: "client at [::ffff:192.0.2.128]:443 connected" };
 
