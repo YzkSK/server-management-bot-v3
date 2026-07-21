@@ -46,7 +46,8 @@ export const DEDICATED_AUDIT_LOG_ACTIONS: ReadonlySet<AuditLogEvent> = new Set([
   AuditLogEvent.StageInstanceDelete,
   AuditLogEvent.IntegrationCreate,
   AuditLogEvent.IntegrationUpdate,
-  AuditLogEvent.IntegrationDelete
+  AuditLogEvent.IntegrationDelete,
+  AuditLogEvent.MessageBulkDelete
 ]);
 
 /**
@@ -75,30 +76,6 @@ export function normalizeAuditLogMessageDelete(
       attachments: [],
       partial: true,
       targetUserId: entry.targetId,
-      count: extractExtraCount(extra),
-      reason: entry.reason
-    }
-  };
-}
-
-export function normalizeAuditLogMessageBulkDelete(
-  entry: GuildAuditLogsEntry,
-  guild: Guild
-): NormalizedEvent {
-  const extra = entry.extra;
-
-  return {
-    eventName: "message.bulk_delete",
-    eventTimestamp: entry.createdAt,
-    receivedAt: new Date(),
-    guildId: guild.id,
-    actorId: entry.executorId,
-    channelId: entry.targetId,
-    messageId: null,
-    payload: {
-      source: "audit_log",
-      auditLogEntryId: entry.id,
-      messageIds: [],
       count: extractExtraCount(extra),
       reason: entry.reason
     }

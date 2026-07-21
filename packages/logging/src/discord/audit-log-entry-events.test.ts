@@ -6,7 +6,6 @@ import { AuditLogEvent } from "discord.js";
 import {
   DEDICATED_AUDIT_LOG_ACTIONS,
   normalizeAuditLogEntry,
-  normalizeAuditLogMessageBulkDelete,
   normalizeAuditLogMessageDelete
 } from "./audit-log-entry-events.js";
 
@@ -72,7 +71,8 @@ describe("DEDICATED_AUDIT_LOG_ACTIONS", () => {
     AuditLogEvent.StageInstanceDelete,
     AuditLogEvent.IntegrationCreate,
     AuditLogEvent.IntegrationUpdate,
-    AuditLogEvent.IntegrationDelete
+    AuditLogEvent.IntegrationDelete,
+    AuditLogEvent.MessageBulkDelete
   ];
 
   it("covers exactly the actions already recorded by dedicated Group A/B handlers", () => {
@@ -88,9 +88,12 @@ describe("DEDICATED_AUDIT_LOG_ACTIONS", () => {
     }
   });
 
-  it("does not cover the specially-handled message delete actions", () => {
+  it("does not cover the specially-handled MessageDelete action", () => {
     assert.equal(DEDICATED_AUDIT_LOG_ACTIONS.has(AuditLogEvent.MessageDelete), false);
-    assert.equal(DEDICATED_AUDIT_LOG_ACTIONS.has(AuditLogEvent.MessageBulkDelete), false);
+  });
+
+  it("covers MessageBulkDelete (recorded by the gateway MessageBulkDelete handler instead)", () => {
+    assert.equal(DEDICATED_AUDIT_LOG_ACTIONS.has(AuditLogEvent.MessageBulkDelete), true);
   });
 });
 
@@ -170,30 +173,5 @@ describe("normalizeAuditLogMessageDelete", () => {
 
     assert.equal(event.channelId, null);
     assert.equal(event.payload.count, null);
-  });
-});
-
-describe("normalizeAuditLogMessageBulkDelete", () => {
-  it("normalizes a message.bulk_delete from an audit log entry", () => {
-    const entry = fakeEntry({
-      action: AuditLogEvent.MessageBulkDelete,
-      targetId: "channel-1",
-      extra: { count: 12 },
-      reason: "raid cleanup"
-    });
-
-    const event = normalizeAuditLogMessageBulkDelete(entry, fakeGuild());
-
-    assert.equal(event.eventName, "message.bulk_delete");
-    assert.equal(event.actorId, "actor-1");
-    assert.equal(event.channelId, "channel-1");
-    assert.equal(event.messageId, null);
-    assert.deepEqual(event.payload, {
-      source: "audit_log",
-      auditLogEntryId: "entry-1",
-      messageIds: [],
-      count: 12,
-      reason: "raid cleanup"
-    });
   });
 });

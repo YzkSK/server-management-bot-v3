@@ -31,6 +31,16 @@ export interface AuditLogLookupOptions {
   retryDelayMs?: number;
   /** マッチ判定の基準時刻。イベント発生時刻を渡すことで、処理遅延やイベント多発時の誤相関を防ぐ。既定は呼び出し時刻。 */
   referenceTime?: Date;
+  /**
+   * action/targetId/時間窓に加えて適用する追加の絞り込み条件。
+   * targetIdだけでは同一チャンネル内の複数操作を区別できない場合(bulk delete等)に使う。
+   */
+  entryFilter?: (entry: GuildAuditLogsEntry) => boolean;
+  /**
+   * trueの場合、絞り込み後の候補が2件以上あれば「どれが該当か特定できない」として
+   * not_foundを返す(誤ったactorId/reasonを補完しないための安全側の挙動)。
+   */
+  requireUnique?: boolean;
 }
 
 export async function lookupAuditLog(
@@ -71,12 +81,22 @@ export async function lookupAuditLog(
   try {
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       const logs = await guild.fetchAuditLogs({ type: action, limit: AUDIT_LOG_FETCH_LIMIT });
-      const entry = findClosestMatchingAuditLogEntry(
-        logs.entries.values(),
-        action,
-        targetId,
-        referenceTimestamp
+      const candidates = [...logs.entries.values()].filter(
+        (candidate) =>
+          isMatchingAuditLogEntry(candidate, action, targetId, referenceTimestamp) &&
+          (options.entryFilter?.(candidate) ?? true)
       );
+
+      if (options.requireUnique && candidates.length > 1) {
+        return {
+          status: "not_found",
+          actorId: null,
+          reason: null,
+          payload: { status: "not_found", action, targetId, reason: "ambiguous" }
+        };
+      }
+
+      const entry = findClosestMatchingAuditLogEntry(candidates, referenceTimestamp);
 
       if (entry) {
         return {
@@ -327,19 +347,13 @@ export async function correlateWithAuditLog(
 }
 
 function findClosestMatchingAuditLogEntry(
-  entries: Iterable<GuildAuditLogsEntry>,
-  action: AuditLogEvent,
-  targetId: string,
+  candidates: readonly GuildAuditLogsEntry[],
   referenceTimestamp: number
 ): GuildAuditLogsEntry | null {
   let closest: GuildAuditLogsEntry | null = null;
   let closestDelta = Infinity;
 
-  for (const entry of entries) {
-    if (!isMatchingAuditLogEntry(entry, action, targetId, referenceTimestamp)) {
-      continue;
-    }
-
+  for (const entry of candidates) {
     const delta = Math.abs(referenceTimestamp - entry.createdTimestamp);
 
     if (delta < closestDelta) {

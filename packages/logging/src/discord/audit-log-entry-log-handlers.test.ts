@@ -68,7 +68,7 @@ describe("createAuditLogEntryLogHandlers", () => {
     assert.equal(event?.payload.partial, true);
   });
 
-  it("writes message.bulk_delete for MessageBulkDelete audit entries", async () => {
+  it("skips MessageBulkDelete audit entries (recorded by the gateway MessageBulkDelete handler instead)", async () => {
     const writeLogEvent = fakeWriteLogEvent();
     const handlers = createAuditLogEntryLogHandlers({ writeLogEvent });
 
@@ -77,8 +77,7 @@ describe("createAuditLogEntryLogHandlers", () => {
       fakeGuild()
     );
 
-    assert.equal(writeLogEvent.mock.calls.length, 1);
-    assert.equal(writeLogEvent.mock.calls[0]?.arguments[0].eventName, "message.bulk_delete");
+    assert.equal(writeLogEvent.mock.calls.length, 0);
   });
 
   it("logs and swallows errors from writeLogEvent without throwing", async () => {
