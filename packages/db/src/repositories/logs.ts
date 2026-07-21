@@ -1,3 +1,4 @@
+import { and, asc, eq, isNull, lt } from "drizzle-orm";
 import type { NormalizedEvent } from "@sm-bot/shared";
 
 import type { DbClient } from "../client.js";
@@ -37,4 +38,54 @@ export async function insertLogEvent(
   }
 
   return log;
+}
+
+export async function markLogEventStreamSynced(
+  db: DbClient,
+  id: string
+): Promise<void> {
+  await db
+    .update(logs)
+    .set({ streamSyncedAt: new Date() })
+    .where(eq(logs.id, id));
+}
+
+export interface UnsyncedLogEvent {
+  id: string;
+  eventName: string;
+  guildId: string | null;
+  actorId: string | null;
+  channelId: string | null;
+  messageId: string | null;
+  eventTimestamp: Date;
+  receivedAt: Date;
+  realtimeEnabled: boolean;
+  payload: Record<string, unknown>;
+}
+
+export async function getUnsyncedLogEvents(
+  db: DbClient,
+  options: { limit: number; olderThanMs: number }
+): Promise<UnsyncedLogEvent[]> {
+  const cutoff = new Date(Date.now() - options.olderThanMs);
+
+  const rows = await db
+    .select({
+      id: logs.id,
+      eventName: logs.eventName,
+      guildId: logs.guildId,
+      actorId: logs.actorId,
+      channelId: logs.channelId,
+      messageId: logs.messageId,
+      eventTimestamp: logs.eventTimestamp,
+      receivedAt: logs.receivedAt,
+      realtimeEnabled: logs.realtimeEnabled,
+      payload: logs.payload
+    })
+    .from(logs)
+    .where(and(isNull(logs.streamSyncedAt), lt(logs.receivedAt, cutoff)))
+    .orderBy(asc(logs.receivedAt))
+    .limit(options.limit);
+
+  return rows as UnsyncedLogEvent[];
 }

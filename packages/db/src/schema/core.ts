@@ -117,7 +117,10 @@ export const logs = pgTable(
       .notNull()
       .defaultNow(),
     realtimeEnabled: boolean("realtime_enabled").notNull().default(false),
-    payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`)
+    payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+    // stream書き込みが未完了/失敗のレコードを示すoutboxマーカー。
+    // null = 未同期。backfillUnsyncedLogEventsがこのカラムを使って再送対象を検出する(issue #103)。
+    streamSyncedAt: timestamp("stream_synced_at", { withTimezone: true })
   },
   (table) => ({
     eventNameIdx: index("logs_event_name_idx").on(table.eventName),
@@ -128,6 +131,11 @@ export const logs = pgTable(
     guildReceivedAtIdx: index("logs_guild_received_at_idx").on(
       table.guildId,
       table.receivedAt
-    )
+    ),
+    // 未同期(streamSyncedAt IS NULL)の行だけを対象にした部分index。
+    // ほぼ全行が最終的にsync済みになるため、全件対象のindexだと肥大化し続ける(issue #103レビュー指摘)。
+    streamSyncedAtIdx: index("logs_stream_synced_at_idx")
+      .on(table.receivedAt)
+      .where(sql`${table.streamSyncedAt} IS NULL`)
   })
 );

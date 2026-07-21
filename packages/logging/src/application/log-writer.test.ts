@@ -6,6 +6,7 @@ import type {
   GuildLogMode,
   getGuildLogMode as GetGuildLogMode,
   insertLogEvent as InsertLogEvent,
+  markLogEventStreamSynced as MarkLogEventStreamSynced,
   upsertGuild as UpsertGuild
 } from "@sm-bot/db";
 import type { NormalizedEvent } from "@sm-bot/shared";
@@ -43,6 +44,10 @@ function createFakeUpsertGuild() {
   return mock.fn<typeof UpsertGuild>(async () => {});
 }
 
+function createFakeMarkLogEventStreamSynced() {
+  return mock.fn<typeof MarkLogEventStreamSynced>(async () => {});
+}
+
 describe("writeLogEvent", () => {
   it("writes to the logs table and the shared stream, skipping the realtime stream for a disabled event", async () => {
     const insertLogEvent = mock.fn<typeof InsertLogEvent>(
@@ -50,10 +55,14 @@ describe("writeLogEvent", () => {
     );
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
     const db = {} as DbClient;
 
-    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode, upsertGuild }, baseEvent);
+    await writeLogEvent(
+      { db, redis, insertLogEvent, getGuildLogMode, upsertGuild, markLogEventStreamSynced },
+      baseEvent
+    );
 
     assert.equal(insertLogEvent.mock.calls.length, 1);
     const insertCall = insertLogEvent.mock.calls[0];
@@ -71,11 +80,15 @@ describe("writeLogEvent", () => {
     );
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
     const db = {} as DbClient;
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
-    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode, upsertGuild }, event);
+    await writeLogEvent(
+      { db, redis, insertLogEvent, getGuildLogMode, upsertGuild, markLogEventStreamSynced },
+      event
+    );
 
     assert.equal(insertLogEvent.mock.calls.length, 1);
     const insertCall = insertLogEvent.mock.calls[0];
@@ -101,6 +114,7 @@ describe("writeLogEvent", () => {
     });
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const redis: RedisStreamWriter = {
       async xAdd(key) {
         redisCallsBeforeDbResolved.push(key);
@@ -110,7 +124,7 @@ describe("writeLogEvent", () => {
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
     const writePromise = writeLogEvent(
-      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild, markLogEventStreamSynced },
       event
     );
 
@@ -135,11 +149,22 @@ describe("writeLogEvent", () => {
     });
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
     const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
 
     await assert.rejects(
-      writeLogEvent({ db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild }, event),
+      writeLogEvent(
+        {
+          db: {} as DbClient,
+          redis,
+          insertLogEvent,
+          getGuildLogMode,
+          upsertGuild,
+          markLogEventStreamSynced
+        },
+        event
+      ),
       dbError
     );
 
@@ -152,10 +177,18 @@ describe("writeLogEvent", () => {
     );
     const getGuildLogMode = createFakeGetGuildLogMode("disabled");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
 
     await writeLogEvent(
-      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+      {
+        db: {} as DbClient,
+        redis,
+        insertLogEvent,
+        getGuildLogMode,
+        upsertGuild,
+        markLogEventStreamSynced
+      },
       baseEvent
     );
 
@@ -170,10 +203,18 @@ describe("writeLogEvent", () => {
     );
     const getGuildLogMode = createFakeGetGuildLogMode("metadata_only");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
 
     await writeLogEvent(
-      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+      {
+        db: {} as DbClient,
+        redis,
+        insertLogEvent,
+        getGuildLogMode,
+        upsertGuild,
+        markLogEventStreamSynced
+      },
       baseEvent
     );
 
@@ -190,6 +231,7 @@ describe("writeLogEvent", () => {
     );
     const getGuildLogMode = createFakeGetGuildLogMode("disabled");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
     const event: NormalizedEvent = {
       ...baseEvent,
@@ -198,7 +240,14 @@ describe("writeLogEvent", () => {
     };
 
     await writeLogEvent(
-      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+      {
+        db: {} as DbClient,
+        redis,
+        insertLogEvent,
+        getGuildLogMode,
+        upsertGuild,
+        markLogEventStreamSynced
+      },
       event
     );
 
@@ -216,11 +265,19 @@ describe("writeLogEvent", () => {
     );
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
     const event: NormalizedEvent = { ...baseEvent, guildId: null };
 
     await writeLogEvent(
-      { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+      {
+        db: {} as DbClient,
+        redis,
+        insertLogEvent,
+        getGuildLogMode,
+        upsertGuild,
+        markLogEventStreamSynced
+      },
       event
     );
 
@@ -243,10 +300,14 @@ describe("writeLogEvent", () => {
     });
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
     const db = {} as DbClient;
 
-    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode, upsertGuild }, baseEvent);
+    await writeLogEvent(
+      { db, redis, insertLogEvent, getGuildLogMode, upsertGuild, markLogEventStreamSynced },
+      baseEvent
+    );
 
     assert.equal(upsertGuild.mock.calls.length, 1);
     assert.equal(upsertGuild.mock.calls[0]?.arguments[0], db);
@@ -270,10 +331,14 @@ describe("writeLogEvent", () => {
     });
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
     const db = {} as DbClient;
 
-    await writeLogEvent({ db, redis, insertLogEvent, getGuildLogMode, upsertGuild }, baseEvent);
+    await writeLogEvent(
+      { db, redis, insertLogEvent, getGuildLogMode, upsertGuild, markLogEventStreamSynced },
+      baseEvent
+    );
 
     assert.equal(upsertGuild.mock.calls.length, 1);
     assert.equal(insertLogEvent.mock.calls.length, 2);
@@ -289,11 +354,19 @@ describe("writeLogEvent", () => {
     });
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
 
     await assert.rejects(
       writeLogEvent(
-        { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+        {
+          db: {} as DbClient,
+          redis,
+          insertLogEvent,
+          getGuildLogMode,
+          upsertGuild,
+          markLogEventStreamSynced
+        },
         baseEvent
       ),
       fkError
@@ -311,11 +384,19 @@ describe("writeLogEvent", () => {
     });
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
 
     await assert.rejects(
       writeLogEvent(
-        { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+        {
+          db: {} as DbClient,
+          redis,
+          insertLogEvent,
+          getGuildLogMode,
+          upsertGuild,
+          markLogEventStreamSynced
+        },
         baseEvent
       ),
       dbError
@@ -335,12 +416,20 @@ describe("writeLogEvent", () => {
     });
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
     const { redis, calls } = createFakeRedis();
     const event: NormalizedEvent = { ...baseEvent, guildId: null };
 
     await assert.rejects(
       writeLogEvent(
-        { db: {} as DbClient, redis, insertLogEvent, getGuildLogMode, upsertGuild },
+        {
+          db: {} as DbClient,
+          redis,
+          insertLogEvent,
+          getGuildLogMode,
+          upsertGuild,
+          markLogEventStreamSynced
+        },
         event
       ),
       fkError
@@ -349,5 +438,45 @@ describe("writeLogEvent", () => {
     assert.equal(upsertGuild.mock.calls.length, 0);
     assert.equal(insertLogEvent.mock.calls.length, 1);
     assert.equal(calls.length, 0);
+  });
+
+  it("marks the log row as stream-synced after a successful stream write", async () => {
+    const insertedLog = { id: "log-1" } as Awaited<ReturnType<typeof InsertLogEvent>>;
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => insertedLog);
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
+    const { redis } = createFakeRedis();
+    const db = {} as DbClient;
+
+    await writeLogEvent(
+      { db, redis, insertLogEvent, getGuildLogMode, upsertGuild, markLogEventStreamSynced },
+      baseEvent
+    );
+
+    assert.equal(markLogEventStreamSynced.mock.calls.length, 1);
+    assert.equal(markLogEventStreamSynced.mock.calls[0]?.arguments[0], db);
+    assert.equal(markLogEventStreamSynced.mock.calls[0]?.arguments[1], "log-1");
+  });
+
+  it("does not throw and does not mark the row synced when the stream write fails", async () => {
+    const insertedLog = { id: "log-1" } as Awaited<ReturnType<typeof InsertLogEvent>>;
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => insertedLog);
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
+    const redis: RedisStreamWriter = {
+      async xAdd() {
+        throw new Error("redis unavailable");
+      }
+    };
+    const db = {} as DbClient;
+
+    await writeLogEvent(
+      { db, redis, insertLogEvent, getGuildLogMode, upsertGuild, markLogEventStreamSynced },
+      baseEvent
+    );
+
+    assert.equal(markLogEventStreamSynced.mock.calls.length, 0);
   });
 });
