@@ -10,6 +10,7 @@ import {
   type WebhookChangeEventName
 } from "./channel-events.js";
 import { applyAuditLog, correlateWithAuditLog, lookupWebhookAuditLogAction } from "./audit-log.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface ChannelLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -35,7 +36,7 @@ export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLo
         AuditLogEvent.ChannelCreate,
         channel.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "channel-log-handlers");
     },
 
     async onChannelDelete(channel) {
@@ -49,7 +50,7 @@ export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLo
         AuditLogEvent.ChannelDelete,
         channel.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "channel-log-handlers");
     },
 
     async onChannelUpdate(oldChannel, newChannel) {
@@ -66,9 +67,9 @@ export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLo
             AuditLogEvent.ChannelUpdate,
             newChannel.id
           );
-          await writeSafely(deps, correlated);
+          await writeSafely(deps, correlated, "channel-log-handlers");
         } else {
-          await writeSafely(deps, event);
+          await writeSafely(deps, event, "channel-log-handlers");
         }
       }
     },
@@ -87,7 +88,7 @@ export function createChannelLogHandlers(deps: ChannelLogHandlerDeps): ChannelLo
         { ...event, eventName: webhookEventNameForAuditLogAction(auditLog.action) },
         auditLog
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "channel-log-handlers");
     }
   };
 }
@@ -102,20 +103,5 @@ function webhookEventNameForAuditLogAction(
       return "webhook.delete";
     default:
       return "webhook.update";
-  }
-}
-
-async function writeSafely(
-  deps: ChannelLogHandlerDeps,
-  event: NormalizedEvent
-): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("channel-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
   }
 }

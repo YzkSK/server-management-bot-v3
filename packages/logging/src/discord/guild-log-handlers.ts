@@ -3,6 +3,7 @@ import { AuditLogEvent, type Guild } from "discord.js";
 
 import { normalizeGuildUpdate } from "./guild-events.js";
 import { correlateWithAuditLog } from "./audit-log.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface GuildLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -25,19 +26,7 @@ export function createGuildLogHandlers(deps: GuildLogHandlerDeps): GuildLogHandl
         AuditLogEvent.GuildUpdate,
         newGuild.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "guild-log-handlers");
     }
   };
-}
-
-async function writeSafely(deps: GuildLogHandlerDeps, event: NormalizedEvent): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("guild-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
-  }
 }

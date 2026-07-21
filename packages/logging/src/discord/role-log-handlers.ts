@@ -7,6 +7,7 @@ import {
   normalizeRoleUpdate
 } from "./role-events.js";
 import { correlateWithAuditLog } from "./audit-log.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface RoleLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -28,7 +29,7 @@ export function createRoleLogHandlers(deps: RoleLogHandlerDeps): RoleLogHandlers
         AuditLogEvent.RoleCreate,
         role.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "role-log-handlers");
     },
 
     async onRoleDelete(role) {
@@ -39,7 +40,7 @@ export function createRoleLogHandlers(deps: RoleLogHandlerDeps): RoleLogHandlers
         AuditLogEvent.RoleDelete,
         role.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "role-log-handlers");
     },
 
     async onRoleUpdate(oldRole, newRole) {
@@ -53,19 +54,7 @@ export function createRoleLogHandlers(deps: RoleLogHandlerDeps): RoleLogHandlers
         AuditLogEvent.RoleUpdate,
         newRole.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "role-log-handlers");
     }
   };
-}
-
-async function writeSafely(deps: RoleLogHandlerDeps, event: NormalizedEvent): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("role-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
-  }
 }

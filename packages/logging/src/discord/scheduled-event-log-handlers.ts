@@ -8,6 +8,7 @@ import {
   normalizeScheduledEventUserAdd,
   normalizeScheduledEventUserRemove
 } from "./scheduled-event-events.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface ScheduledEventLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -35,38 +36,35 @@ export function createScheduledEventLogHandlers(
 ): ScheduledEventLogHandlers {
   return {
     async onScheduledEventCreate(event) {
-      await writeSafely(deps, normalizeScheduledEventCreate(event));
+      await writeSafely(deps, normalizeScheduledEventCreate(event), "scheduled-event-log-handlers");
     },
 
     async onScheduledEventUpdate(oldEvent, newEvent) {
-      await writeSafely(deps, normalizeScheduledEventUpdate(oldEvent, newEvent));
+      await writeSafely(
+        deps,
+        normalizeScheduledEventUpdate(oldEvent, newEvent),
+        "scheduled-event-log-handlers"
+      );
     },
 
     async onScheduledEventDelete(event) {
-      await writeSafely(deps, normalizeScheduledEventDelete(event));
+      await writeSafely(deps, normalizeScheduledEventDelete(event), "scheduled-event-log-handlers");
     },
 
     async onScheduledEventUserAdd(event, user) {
-      await writeSafely(deps, normalizeScheduledEventUserAdd(event, user));
+      await writeSafely(
+        deps,
+        normalizeScheduledEventUserAdd(event, user),
+        "scheduled-event-log-handlers"
+      );
     },
 
     async onScheduledEventUserRemove(event, user) {
-      await writeSafely(deps, normalizeScheduledEventUserRemove(event, user));
+      await writeSafely(
+        deps,
+        normalizeScheduledEventUserRemove(event, user),
+        "scheduled-event-log-handlers"
+      );
     }
   };
-}
-
-async function writeSafely(
-  deps: ScheduledEventLogHandlerDeps,
-  event: NormalizedEvent
-): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("scheduled-event-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
-  }
 }

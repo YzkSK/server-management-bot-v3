@@ -4,6 +4,7 @@ import { AuditLogEvent, type Guild, type Invite } from "discord.js";
 import { correlateWithAuditLog, getInviteGuild } from "./audit-log.js";
 import type { InviteCache } from "./invite-cache.js";
 import { normalizeInviteCreate, normalizeInviteDelete } from "./invite-events.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface InviteLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -46,7 +47,7 @@ export function createInviteLogHandlers(deps: InviteLogHandlerDeps): InviteLogHa
         AuditLogEvent.InviteCreate,
         invite.code
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "invite-log-handlers");
     },
 
     async onInviteDelete(invite) {
@@ -59,19 +60,7 @@ export function createInviteLogHandlers(deps: InviteLogHandlerDeps): InviteLogHa
         AuditLogEvent.InviteDelete,
         invite.code
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "invite-log-handlers");
     }
   };
-}
-
-async function writeSafely(deps: InviteLogHandlerDeps, event: NormalizedEvent): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("invite-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
-  }
 }

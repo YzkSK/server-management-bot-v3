@@ -6,6 +6,7 @@ import {
   normalizeStageDelete,
   normalizeStageUpdate
 } from "./stage-events.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface StageLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -20,27 +21,15 @@ export interface StageLogHandlers {
 export function createStageLogHandlers(deps: StageLogHandlerDeps): StageLogHandlers {
   return {
     async onStageCreate(stage) {
-      await writeSafely(deps, normalizeStageCreate(stage));
+      await writeSafely(deps, normalizeStageCreate(stage), "stage-log-handlers");
     },
 
     async onStageUpdate(oldStage, newStage) {
-      await writeSafely(deps, normalizeStageUpdate(oldStage, newStage));
+      await writeSafely(deps, normalizeStageUpdate(oldStage, newStage), "stage-log-handlers");
     },
 
     async onStageDelete(stage) {
-      await writeSafely(deps, normalizeStageDelete(stage));
+      await writeSafely(deps, normalizeStageDelete(stage), "stage-log-handlers");
     }
   };
-}
-
-async function writeSafely(deps: StageLogHandlerDeps, event: NormalizedEvent): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("stage-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
-  }
 }

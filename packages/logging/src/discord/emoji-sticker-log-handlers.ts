@@ -10,6 +10,7 @@ import {
   normalizeStickerDelete,
   normalizeStickerUpdate
 } from "./emoji-sticker-events.js";
+import { writeSafely } from "./write-safely.js";
 
 export interface EmojiStickerLogHandlerDeps {
   writeLogEvent: (event: NormalizedEvent) => Promise<void>;
@@ -36,7 +37,7 @@ export function createEmojiStickerLogHandlers(
         AuditLogEvent.EmojiCreate,
         emoji.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "emoji-sticker-log-handlers");
     },
 
     async onEmojiDelete(emoji) {
@@ -47,7 +48,7 @@ export function createEmojiStickerLogHandlers(
         AuditLogEvent.EmojiDelete,
         emoji.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "emoji-sticker-log-handlers");
     },
 
     async onEmojiUpdate(oldEmoji, newEmoji) {
@@ -61,7 +62,7 @@ export function createEmojiStickerLogHandlers(
         AuditLogEvent.EmojiUpdate,
         newEmoji.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "emoji-sticker-log-handlers");
     },
 
     async onStickerCreate(sticker) {
@@ -72,7 +73,7 @@ export function createEmojiStickerLogHandlers(
         AuditLogEvent.StickerCreate,
         sticker.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "emoji-sticker-log-handlers");
     },
 
     async onStickerDelete(sticker) {
@@ -83,7 +84,7 @@ export function createEmojiStickerLogHandlers(
         AuditLogEvent.StickerDelete,
         sticker.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "emoji-sticker-log-handlers");
     },
 
     async onStickerUpdate(oldSticker, newSticker) {
@@ -97,22 +98,7 @@ export function createEmojiStickerLogHandlers(
         AuditLogEvent.StickerUpdate,
         newSticker.id
       );
-      await writeSafely(deps, correlated);
+      await writeSafely(deps, correlated, "emoji-sticker-log-handlers");
     }
   };
-}
-
-async function writeSafely(
-  deps: EmojiStickerLogHandlerDeps,
-  event: NormalizedEvent
-): Promise<void> {
-  try {
-    await deps.writeLogEvent(event);
-  } catch (err) {
-    console.error("emoji-sticker-log-handlers: failed to write log event", {
-      eventName: event.eventName,
-      guildId: event.guildId,
-      err
-    });
-  }
 }
