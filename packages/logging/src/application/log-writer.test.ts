@@ -459,6 +459,32 @@ describe("writeLogEvent", () => {
     assert.equal(markLogEventStreamSynced.mock.calls[0]?.arguments[1], "log-1");
   });
 
+  it("scrubs sensitive strings from the payload before persisting", async () => {
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(
+      async () => ({}) as Awaited<ReturnType<typeof InsertLogEvent>>
+    );
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
+    const { redis } = createFakeRedis();
+    const db = {} as DbClient;
+    const event: NormalizedEvent = {
+      ...baseEvent,
+      payload: { content: "connect to 10.0.0.1 please" }
+    };
+
+    await writeLogEvent(
+      { db, redis, insertLogEvent, getGuildLogMode, upsertGuild, markLogEventStreamSynced },
+      event
+    );
+
+    const insertCall = insertLogEvent.mock.calls[0];
+    assert.deepEqual(
+      (insertCall?.arguments[1] as { payload: Record<string, unknown> }).payload,
+      { content: "connect to [REDACTED_IP] please" }
+    );
+  });
+
   it("does not throw and does not mark the row synced when the stream write fails", async () => {
     const insertedLog = { id: "log-1" } as Awaited<ReturnType<typeof InsertLogEvent>>;
     const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => insertedLog);

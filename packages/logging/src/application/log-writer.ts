@@ -12,6 +12,7 @@ import {
   resolveLogWriteAction,
   stripMessageContent
 } from "../domain/log-mode-policy.js";
+import { scrubSensitiveStrings } from "../domain/log-scrubber.js";
 import { resolveRealtimeEnabled } from "../domain/realtime-policy.js";
 import {
   appendLogEventToStream,
@@ -71,8 +72,12 @@ export async function writeLogEvent(
     return;
   }
 
-  const eventToPersist =
+  const strippedEvent =
     writeAction === "write-metadata-only" ? stripMessageContent(event) : event;
+  const eventToPersist = {
+    ...strippedEvent,
+    payload: scrubSensitiveStrings(strippedEvent.payload)
+  };
   const realtimeEnabled = resolveRealtimeEnabled(eventToPersist.eventName);
 
   // logsテーブルへの永続化を正とするため、DB書き込みが成功してからRedis Streamに流す。
