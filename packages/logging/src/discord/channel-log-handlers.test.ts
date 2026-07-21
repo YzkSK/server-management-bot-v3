@@ -45,6 +45,7 @@ function auditLogEntry(overrides: Record<string, unknown> = {}) {
     id: "entry-1",
     targetId: "channel-1",
     target: null,
+    changes: [],
     executorId: "actor-1",
     executor: null,
     reason: null,
@@ -197,27 +198,107 @@ describe("createChannelLogHandlers", () => {
     }
   });
 
-  it("writes webhook.update on onWebhooksUpdate", async () => {
+  it("falls back to webhook.update when the bot lacks ViewAuditLog", async () => {
     const writeLogEvent = fakeWriteLogEvent();
     const handlers = createChannelLogHandlers({ writeLogEvent });
 
     await handlers.onWebhooksUpdate(fakeChannel());
 
     assert.equal(writeLogEvent.mock.calls.length, 1);
-    assert.equal(writeLogEvent.mock.calls[0]?.arguments[0].eventName, "webhook.update");
+    const event = writeLogEvent.mock.calls[0]?.arguments[0];
+    assert.equal(event?.eventName, "webhook.update");
+    assert.equal(event?.actorId, null);
   });
 
-  it("does not attempt audit log correlation for webhook.update (targetId is the webhook, not the channel)", async () => {
+  it("classifies onWebhooksUpdate as webhook.create when a matching WebhookCreate audit log entry exists", async () => {
     const writeLogEvent = fakeWriteLogEvent();
     const handlers = createChannelLogHandlers({ writeLogEvent });
-    const fetchAuditLogs = mock.fn(async () => ({
-      entries: new Collection([["entry-1", auditLogEntry({ action: AuditLogEvent.WebhookUpdate })]])
+    const guild = grantedGuild(async () => ({
+      entries: new Collection([
+        [
+          "entry-1",
+          auditLogEntry({
+            action: AuditLogEvent.WebhookCreate,
+            target: { channelId: "channel-1" }
+          })
+        ]
+      ])
     }));
-    const guild = grantedGuild(fetchAuditLogs);
 
     await handlers.onWebhooksUpdate(fakeChannel({ guild }));
 
-    assert.equal(fetchAuditLogs.mock.calls.length, 0);
-    assert.equal(writeLogEvent.mock.calls[0]?.arguments[0].actorId, null);
+    assert.equal(writeLogEvent.mock.calls.length, 1);
+    const event = writeLogEvent.mock.calls[0]?.arguments[0];
+    assert.equal(event?.eventName, "webhook.create");
+    assert.equal(event?.actorId, "actor-1");
+  });
+
+  it("classifies onWebhooksUpdate as webhook.delete when a matching WebhookDelete audit log entry exists", async () => {
+    const writeLogEvent = fakeWriteLogEvent();
+    const handlers = createChannelLogHandlers({ writeLogEvent });
+    const guild = grantedGuild(async () => ({
+      entries: new Collection([
+        [
+          "entry-1",
+          auditLogEntry({
+            action: AuditLogEvent.WebhookDelete,
+            target: { channelId: "channel-1" }
+          })
+        ]
+      ])
+    }));
+
+    await handlers.onWebhooksUpdate(fakeChannel({ guild }));
+
+    assert.equal(writeLogEvent.mock.calls.length, 1);
+    const event = writeLogEvent.mock.calls[0]?.arguments[0];
+    assert.equal(event?.eventName, "webhook.delete");
+    assert.equal(event?.actorId, "actor-1");
+  });
+
+  it("keeps webhook.update when a matching WebhookUpdate audit log entry exists", async () => {
+    const writeLogEvent = fakeWriteLogEvent();
+    const handlers = createChannelLogHandlers({ writeLogEvent });
+    const guild = grantedGuild(async () => ({
+      entries: new Collection([
+        [
+          "entry-1",
+          auditLogEntry({
+            action: AuditLogEvent.WebhookUpdate,
+            target: { channelId: "channel-1" }
+          })
+        ]
+      ])
+    }));
+
+    await handlers.onWebhooksUpdate(fakeChannel({ guild }));
+
+    assert.equal(writeLogEvent.mock.calls.length, 1);
+    const event = writeLogEvent.mock.calls[0]?.arguments[0];
+    assert.equal(event?.eventName, "webhook.update");
+    assert.equal(event?.actorId, "actor-1");
+  });
+
+  it("falls back to webhook.update when the matching audit log entry targets a different channel", async () => {
+    const writeLogEvent = fakeWriteLogEvent();
+    const handlers = createChannelLogHandlers({ writeLogEvent });
+    const guild = grantedGuild(async () => ({
+      entries: new Collection([
+        [
+          "entry-1",
+          auditLogEntry({
+            action: AuditLogEvent.WebhookCreate,
+            target: { channelId: "channel-2" }
+          })
+        ]
+      ])
+    }));
+
+    await handlers.onWebhooksUpdate(fakeChannel({ guild }));
+
+    assert.equal(writeLogEvent.mock.calls.length, 1);
+    const event = writeLogEvent.mock.calls[0]?.arguments[0];
+    assert.equal(event?.eventName, "webhook.update");
+    assert.equal(event?.actorId, null);
   });
 });

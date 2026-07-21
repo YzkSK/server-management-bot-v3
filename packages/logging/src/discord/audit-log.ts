@@ -1,11 +1,15 @@
 import type { NormalizedEvent } from "@sm-bot/shared";
 import {
+  AuditLogEvent,
   PermissionFlagsBits,
-  type AuditLogEvent,
   type Guild,
   type GuildAuditLogsEntry,
   type Invite
 } from "discord.js";
+
+const AuditLogEventWebhookCreate = AuditLogEvent.WebhookCreate;
+const AuditLogEventWebhookUpdate = AuditLogEvent.WebhookUpdate;
+const AuditLogEventWebhookDelete = AuditLogEvent.WebhookDelete;
 
 import { userPayload } from "./payloads.js";
 
@@ -120,6 +124,179 @@ export async function lookupAuditLog(
 
 function sleep(ms: number): Promise<void> {
   return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
+const WEBHOOK_AUDIT_LOG_ACTIONS = [
+  AuditLogEventWebhookCreate,
+  AuditLogEventWebhookUpdate,
+  AuditLogEventWebhookDelete
+] as const;
+const WEBHOOK_AUDIT_LOG_ACTION_SET: ReadonlySet<AuditLogEvent> = new Set(WEBHOOK_AUDIT_LOG_ACTIONS);
+
+export interface WebhookAuditLogLookupResult extends AuditLogLookupResult {
+  action:
+    | typeof AuditLogEventWebhookCreate
+    | typeof AuditLogEventWebhookUpdate
+    | typeof AuditLogEventWebhookDelete
+    | null;
+}
+
+/**
+ * WebhooksUpdateゲートウェイイベントはchannelIdしか渡さず、対象webhookのIDが分からないため、
+ * targetIdでの相関(lookupAuditLog)ではなく、WebhookCreate/Update/Delete全件からentry.target.channelId
+ * が一致するものを探して操作種別を判定する。
+ */
+export async function lookupWebhookAuditLogAction(
+  guild: Guild | null,
+  channelId: string,
+  options: AuditLogLookupOptions = {}
+): Promise<WebhookAuditLogLookupResult> {
+  if (!guild) {
+    return {
+      status: "missing_guild",
+      action: null,
+      actorId: null,
+      reason: null,
+      payload: { status: "missing_guild", channelId }
+    };
+  }
+
+  const me = guild.members.me ?? (await guild.members.fetchMe().catch(() => null));
+
+  if (!me?.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
+    return {
+      status: "missing_permission",
+      action: null,
+      actorId: null,
+      reason: null,
+      payload: {
+        status: "missing_permission",
+        channelId,
+        requiredPermission: "ViewAuditLog"
+      }
+    };
+  }
+
+  const retries = options.retries ?? AUDIT_LOG_RETRY_ATTEMPTS;
+  const retryDelayMs = options.retryDelayMs ?? AUDIT_LOG_RETRY_DELAY_MS;
+  const referenceTimestamp = (options.referenceTime ?? new Date()).getTime();
+
+  try {
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      const logsByAction = await Promise.all(
+        WEBHOOK_AUDIT_LOG_ACTIONS.map((type) =>
+          guild.fetchAuditLogs({ type, limit: AUDIT_LOG_FETCH_LIMIT })
+        )
+      );
+      const entry = findClosestMatchingWebhookAuditLogEntry(
+        logsByAction.flatMap((logs) => [...logs.entries.values()]),
+        channelId,
+        referenceTimestamp
+      );
+
+      if (entry) {
+        return {
+          status: "matched",
+          action: entry.action as WebhookAuditLogLookupResult["action"],
+          actorId: entry.executorId,
+          reason: entry.reason,
+          payload: {
+            status: "matched",
+            id: entry.id,
+            action: entry.action,
+            targetId: entry.targetId,
+            executorId: entry.executorId,
+            executor: entry.executor ? userPayload(entry.executor) : null,
+            reason: entry.reason,
+            createdAt: entry.createdAt.toISOString()
+          }
+        };
+      }
+
+      if (attempt < retries) {
+        await sleep(retryDelayMs);
+      }
+    }
+
+    return {
+      status: "not_found",
+      action: null,
+      actorId: null,
+      reason: null,
+      payload: { status: "not_found", channelId }
+    };
+  } catch (error: unknown) {
+    return {
+      status: "error",
+      action: null,
+      actorId: null,
+      reason: null,
+      payload: {
+        status: "error",
+        channelId,
+        message: error instanceof Error ? error.message : String(error)
+      }
+    };
+  }
+}
+
+function findClosestMatchingWebhookAuditLogEntry(
+  entries: Iterable<GuildAuditLogsEntry>,
+  channelId: string,
+  referenceTimestamp: number
+): GuildAuditLogsEntry | null {
+  let closest: GuildAuditLogsEntry | null = null;
+  let closestDelta = Infinity;
+
+  for (const entry of entries) {
+    if (!WEBHOOK_AUDIT_LOG_ACTION_SET.has(entry.action)) {
+      continue;
+    }
+
+    const delta = Math.abs(referenceTimestamp - entry.createdTimestamp);
+
+    if (delta > AUDIT_LOG_LOOKUP_WINDOW_MS) {
+      continue;
+    }
+
+    if (getWebhookEntryChannelId(entry) !== channelId) {
+      continue;
+    }
+
+    if (delta < closestDelta) {
+      closest = entry;
+      closestDelta = delta;
+    }
+  }
+
+  return closest;
+}
+
+/**
+ * WebhookDeleteではtarget_idに対応するwebhookが既にキャッシュから失われ、
+ * entry.targetがchannelIdを持たないことがあるため、entry.changesのchannel_id変更
+ * (削除前スナップショットとして残る)もフォールバックとして参照する。
+ */
+function getWebhookEntryChannelId(entry: GuildAuditLogsEntry): string | null {
+  const targetChannelId = getWebhookTargetChannelId(entry.target);
+
+  if (targetChannelId) {
+    return targetChannelId;
+  }
+
+  const channelIdChange = entry.changes.find((change) => change.key === "channel_id");
+  const channelIdValue = channelIdChange?.new ?? channelIdChange?.old;
+
+  return typeof channelIdValue === "string" ? channelIdValue : null;
+}
+
+function getWebhookTargetChannelId(target: unknown): string | null {
+  if (target && typeof target === "object" && "channelId" in target) {
+    const channelId = (target as { channelId: unknown }).channelId;
+    return typeof channelId === "string" ? channelId : null;
+  }
+
+  return null;
 }
 
 export function applyAuditLog(
