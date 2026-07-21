@@ -98,9 +98,20 @@ export async function writeLogEvent(
         ? appendRealtimeLogEventToStream(deps.redis, eventToPersist, { realtimeEnabled })
         : Promise.resolve()
     ]);
-    await deps.markLogEventStreamSynced(deps.db, log.id);
   } catch (err) {
     console.error("log-writer: failed to append log event to redis stream", {
+      logId: log.id,
+      eventName: eventToPersist.eventName,
+      guildId: eventToPersist.guildId,
+      err
+    });
+    return;
+  }
+
+  try {
+    await deps.markLogEventStreamSynced(deps.db, log.id);
+  } catch (err) {
+    console.error("log-writer: failed to mark log event as stream-synced", {
       logId: log.id,
       eventName: eventToPersist.eventName,
       guildId: eventToPersist.guildId,
