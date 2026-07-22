@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 
 import { trpc } from "../trpc-client";
@@ -33,6 +34,7 @@ export function HomePageView({ state }: { state: HomePageState }) {
       <p>Logged in as {state.data.userId}</p>
       <p>Guild owner: {state.data.isGuildOwner ? "yes" : "no"}</p>
       <p>Capabilities: {state.data.capabilities}</p>
+      <Link href="/g">Select a server</Link>
     </main>
   );
 }
