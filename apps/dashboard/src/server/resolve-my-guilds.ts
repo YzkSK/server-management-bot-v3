@@ -2,8 +2,8 @@ import type { DashboardAccessCacheClient } from "@sm-bot/dashboard-access";
 import type { DbClient } from "@sm-bot/db";
 import { getKnownGuildIds as getKnownGuildIdsFromDb } from "@sm-bot/db";
 
-import { fetchCurrentUserDiscordGuilds as fetchCurrentUserDiscordGuildsFromDiscord } from "./discord-user-guilds.js";
-import { resolveDashboardAccessForRequest as resolveDashboardAccessForRequestDefault } from "./resolve-dashboard-access.js";
+import { fetchCurrentUserDiscordGuilds as fetchCurrentUserDiscordGuildsFromDiscord } from "./discord-user-guilds";
+import { resolveDashboardAccessForRequest as resolveDashboardAccessForRequestDefault } from "./resolve-dashboard-access";
 
 export interface ResolveMyGuildsInput {
   db: DbClient;
