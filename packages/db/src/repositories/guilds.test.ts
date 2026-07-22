@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { guilds } from "../schema/index.js";
-import { upsertGuild } from "./guilds.js";
+import { getKnownGuildIds, upsertGuild } from "./guilds.js";
 
 function createFakeDb(guildRows: Array<Record<string, unknown>>) {
   return {
@@ -45,5 +45,38 @@ describe("upsertGuild", () => {
 
     assert.equal(guildRows.length, 1);
     assert.equal(guildRows[0]?.isActive, true);
+  });
+});
+
+describe("getKnownGuildIds", () => {
+  it("returns an empty set for an empty input array without querying", async () => {
+    const db = {
+      select() {
+        throw new Error("should not be called");
+      }
+    };
+
+    const result = await getKnownGuildIds(db as never, []);
+
+    assert.deepEqual(result, new Set());
+  });
+
+  it("returns only the guild ids that exist in the guilds table", async () => {
+    const rows = [{ guildId: "guild-1" }, { guildId: "guild-2" }];
+    const db = {
+      select() {
+        return {
+          from() {
+            return {
+              where: async () => rows
+            };
+          }
+        };
+      }
+    };
+
+    const result = await getKnownGuildIds(db as never, ["guild-1", "guild-2", "guild-3"]);
+
+    assert.deepEqual(result, new Set(["guild-1", "guild-2"]));
   });
 });
