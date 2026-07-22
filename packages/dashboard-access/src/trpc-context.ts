@@ -3,4 +3,5 @@ export interface DashboardAccessContext {
   guildId: string | null;
   isGuildOwner: boolean;
   capabilities: bigint;
+  discordAccessToken: string | null;
 }
