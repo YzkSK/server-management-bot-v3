@@ -4,6 +4,7 @@ import { isServer, QueryClient, QueryClientProvider } from "@tanstack/react-quer
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { useState, type ReactNode } from "react";
 
+import { currentGuildIdRef } from "../guild-context";
 import { trpc } from "../trpc-client";
 
 function makeQueryClient() {
@@ -44,7 +45,10 @@ export function Providers({ children }: { children: ReactNode }) {
     trpc.createClient({
       links: [
         httpBatchLink({
-          url: "/api/trpc"
+          url: "/api/trpc",
+          headers() {
+            return currentGuildIdRef.current ? { "x-guild-id": currentGuildIdRef.current } : {};
+          }
         })
       ]
     })
