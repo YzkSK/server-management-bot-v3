@@ -21,6 +21,30 @@ export interface MyGuildSummary {
   name: string;
 }
 
+// ユーザーが所属するギルド数だけ resolveDashboardAccessForRequest (Discordのメンバー取得API呼び出しを含む)
+// を無制限に並列実行すると、多数のギルドに所属するユーザーでDiscord APIのレート制限に抵触しうる。
+// そのため同時実行数をこの値に制限する(コードレビュー指摘: task-6a)。
+const RESOLVE_ACCESS_CONCURRENCY = 5;
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      for (let index = nextIndex++; index < items.length; index = nextIndex++) {
+        results[index] = await fn(items[index] as T);
+      }
+    })
+  );
+
+  return results;
+}
+
 export async function resolveMyGuilds(input: ResolveMyGuildsInput): Promise<MyGuildSummary[]> {
   const fetchGuilds = input.fetchCurrentUserDiscordGuilds ?? fetchCurrentUserDiscordGuildsFromDiscord;
   const getKnownGuildIds = input.getKnownGuildIds ?? getKnownGuildIdsFromDb;
@@ -32,22 +56,24 @@ export async function resolveMyGuilds(input: ResolveMyGuildsInput): Promise<MyGu
     discordGuilds.map((guild) => guild.id)
   );
 
-  const accessible = await Promise.all(
-    discordGuilds
-      .filter((guild) => knownGuildIds.has(guild.id))
-      .map(async (guild) => {
-        if (guild.owner) return { id: guild.id, name: guild.name };
+  const candidateGuilds = discordGuilds.filter((guild) => knownGuildIds.has(guild.id));
 
-        const access = await resolveAccess({
-          db: input.db,
-          cache: input.cache,
-          botToken: input.botToken,
-          guildId: guild.id,
-          userId: input.userId
-        });
+  const accessible = await mapWithConcurrency(
+    candidateGuilds,
+    RESOLVE_ACCESS_CONCURRENCY,
+    async (guild) => {
+      if (guild.owner) return { id: guild.id, name: guild.name };
 
-        return access.capabilities !== 0n ? { id: guild.id, name: guild.name } : null;
-      })
+      const access = await resolveAccess({
+        db: input.db,
+        cache: input.cache,
+        botToken: input.botToken,
+        guildId: guild.id,
+        userId: input.userId
+      });
+
+      return access.capabilities !== 0n ? { id: guild.id, name: guild.name } : null;
+    }
   );
 
   return accessible.filter((guild): guild is MyGuildSummary => guild !== null);

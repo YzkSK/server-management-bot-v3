@@ -65,4 +65,34 @@ describe("resolveMyGuilds", () => {
 
     assert.deepEqual(result, [{ id: "guild-1", name: "Has Capability" }]);
   });
+
+  it("bounds concurrent resolveDashboardAccessForRequest calls", async () => {
+    const discordGuilds: DiscordUserGuild[] = Array.from({ length: 12 }, (_, index) => ({
+      id: `guild-${index}`,
+      name: `Guild ${index}`,
+      owner: false
+    }));
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    const result = await resolveMyGuilds({
+      ...BASE_INPUT,
+      fetchCurrentUserDiscordGuilds: async () => discordGuilds,
+      getKnownGuildIds: async () => new Set(discordGuilds.map((guild) => guild.id)),
+      resolveDashboardAccessForRequest: async ({ guildId }: { guildId: string }) => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        inFlight -= 1;
+        return {
+          isGuildOwner: false,
+          capabilities: guildId === "guild-0" ? CAP.VIEW_LOGS : 0n
+        };
+      }
+    });
+
+    assert.ok(maxInFlight <= 5, `expected max in-flight calls <= 5, got ${maxInFlight}`);
+    assert.deepEqual(result, [{ id: "guild-0", name: "Guild 0" }]);
+  });
 });
