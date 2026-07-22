@@ -18,9 +18,18 @@ export const authOptions: AuthOptions = {
     })
   ],
   callbacks: {
+    async jwt({ token, account }) {
+      // accountはサインイン直後のみ渡される。以降のリクエストではtokenに
+      // 既に積まれた値をそのまま引き継ぐ(リフレッシュは今回のスコープ外)。
+      if (account?.access_token) {
+        token.discordAccessToken = account.access_token;
+      }
+      return token;
+    },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub;
+        session.user.discordAccessToken = token.discordAccessToken ?? null;
       }
       return session;
     }
