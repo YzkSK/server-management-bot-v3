@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { and, eq, inArray } from "drizzle-orm";
+
 import { guilds } from "../schema/index.js";
 import { getKnownGuildIds, upsertGuild } from "./guilds.js";
 
@@ -78,5 +80,38 @@ describe("getKnownGuildIds", () => {
     const result = await getKnownGuildIds(db as never, ["guild-1", "guild-2", "guild-3"]);
 
     assert.deepEqual(result, new Set(["guild-1", "guild-2"]));
+  });
+
+  it("filters the query on isActive = true, excluding inactive guilds", async () => {
+    // このモックのwhere()は渡された条件を無視して固定のrowsを返す(既存テストと同様)。
+    // isActiveフィルタが実際にクエリへ組み込まれていることを検証するため、
+    // where()に渡された条件そのものを捕捉し、期待するSQL条件と比較する。
+    const guildIds = ["guild-1", "guild-2", "guild-3"];
+    let capturedWhereArg: unknown;
+    const db = {
+      select() {
+        return {
+          from() {
+            return {
+              where: async (whereArg: unknown) => {
+                capturedWhereArg = whereArg;
+                // 実DBは isActive=false のguild-3を除外して返す想定
+                return [{ guildId: "guild-1" }, { guildId: "guild-2" }];
+              }
+            };
+          }
+        };
+      }
+    };
+
+    const result = await getKnownGuildIds(db as never, guildIds);
+
+    assert.deepEqual(result, new Set(["guild-1", "guild-2"]));
+
+    const expectedWhereArg = and(
+      inArray(guilds.guildId, guildIds),
+      eq(guilds.isActive, true)
+    );
+    assert.deepStrictEqual(capturedWhereArg, expectedWhereArg);
   });
 });
