@@ -18,7 +18,7 @@ describe("fetchCurrentUserDiscordGuilds", () => {
           { id: "guild-2", name: "Guild Two", owner: false }
         ]),
         { status: 200 }
-      )) as typeof fetch;
+      )) as unknown as typeof fetch;
 
     const result = await fetchCurrentUserDiscordGuilds("token-abc");
 
@@ -30,7 +30,7 @@ describe("fetchCurrentUserDiscordGuilds", () => {
 
   test("throws DiscordApiError with status 401 when the token is invalid", async () => {
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ message: "401: Unauthorized" }), { status: 401 })) as typeof fetch;
+      new Response(JSON.stringify({ message: "401: Unauthorized" }), { status: 401 })) as unknown as typeof fetch;
 
     await expect(fetchCurrentUserDiscordGuilds("bad-token")).rejects.toThrow(DiscordApiError);
   });
