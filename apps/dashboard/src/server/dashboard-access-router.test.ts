@@ -40,6 +40,14 @@ describe("dashboardAccessRouter.me", () => {
   });
 });
 
+describe("dashboardAccessRouter.myGuilds", () => {
+  it("rejects when the session has no Discord access token", async () => {
+    const caller = dashboardAccessRouter.createCaller(context({ discordAccessToken: null }));
+
+    await rejectsWithCode(caller.myGuilds(), "UNAUTHORIZED");
+  });
+});
+
 describe("dashboardAccessRouter.grant (delegation rules)", () => {
   it("rejects the request entirely if the caller lacks MANAGE_ACCESS", async () => {
     const caller = dashboardAccessRouter.createCaller(context({ capabilities: CAP.VIEW_LOGS }));

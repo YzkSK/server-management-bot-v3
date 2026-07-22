@@ -8,6 +8,12 @@ import {
   parseCapabilitiesWireString
 } from "@sm-bot/shared";
 import { protectedProcedure, requireCapability, router } from "@sm-bot/dashboard-access";
+import { parseDashboardAuthEnv } from "@sm-bot/config";
+
+import { getDashboardDb, getDashboardRedisClient } from "./trpc-context.js";
+import { resolveMyGuilds } from "./resolve-my-guilds.js";
+
+const env = parseDashboardAuthEnv();
 
 // Turns a malformed/unknown wire string into a Zod BAD_REQUEST instead of
 // letting parseCapabilitiesWireString's RangeError surface as a 500.
@@ -36,6 +42,20 @@ export const dashboardAccessRouter = router({
     isGuildOwner: ctx.isGuildOwner,
     capabilities: capabilitiesToWireString(ctx.capabilities)
   })),
+
+  myGuilds: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.discordAccessToken) {
+      throw new TRPCError({ code: "UNAUTHORIZED" });
+    }
+
+    return resolveMyGuilds({
+      db: getDashboardDb(),
+      cache: await getDashboardRedisClient(),
+      botToken: env.DISCORD_BOT_TOKEN,
+      userId: ctx.userId!,
+      discordAccessToken: ctx.discordAccessToken
+    });
+  }),
 
   grant: requireCapability(CAP.MANAGE_ACCESS)
     .input(grantInput)
