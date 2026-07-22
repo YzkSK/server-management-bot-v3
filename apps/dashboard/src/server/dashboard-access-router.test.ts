@@ -12,6 +12,7 @@ function context(overrides: Partial<DashboardAccessContext> = {}): DashboardAcce
     guildId: "guild-1",
     isGuildOwner: false,
     capabilities: 0n,
+    discordAccessToken: null,
     ...overrides
   };
 }

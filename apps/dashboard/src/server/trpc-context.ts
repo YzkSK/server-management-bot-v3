@@ -11,14 +11,14 @@ import { resolveDashboardAccessForRequest } from "./resolve-dashboard-access";
 const env = parseDashboardAuthEnv();
 
 let db: DbClient | null = null;
-function getDb(): DbClient {
+export function getDashboardDb(): DbClient {
   db ??= createDbConnection(env.DATABASE_URL).db;
   return db;
 }
 
 let redisClient: RedisClientType | null = null;
 let redisReady: Promise<void> | null = null;
-async function getRedisClient(): Promise<RedisClientType> {
+export async function getDashboardRedisClient(): Promise<RedisClientType> {
   if (!redisClient) {
     const client: RedisClientType = createClient({ url: env.REDIS_URL });
     client.on("error", (error: unknown) => {
@@ -38,26 +38,23 @@ async function getRedisClient(): Promise<RedisClientType> {
   return redisClient;
 }
 
-export async function createContext(_req: NextRequest): Promise<DashboardAccessContext> {
+export async function createContext(req: NextRequest): Promise<DashboardAccessContext> {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id ?? null;
-
-  // No guild-scoped routes exist yet, so no request can supply a guildId
-  // (tracked as a follow-up issue). Once wired, the branch below already
-  // computes real effective capabilities via resolveDashboardAccessForRequest.
-  const guildId: string | null = null;
+  const discordAccessToken = session?.user?.discordAccessToken ?? null;
+  const guildId = req.headers.get("x-guild-id");
 
   if (!userId || !guildId) {
-    return { userId, guildId, isGuildOwner: false, capabilities: 0n };
+    return { userId, guildId, isGuildOwner: false, capabilities: 0n, discordAccessToken };
   }
 
   const access = await resolveDashboardAccessForRequest({
-    db: getDb(),
-    cache: await getRedisClient(),
+    db: getDashboardDb(),
+    cache: await getDashboardRedisClient(),
     botToken: env.DISCORD_BOT_TOKEN,
     guildId,
     userId
   });
 
-  return { userId, guildId, ...access };
+  return { userId, guildId, discordAccessToken, ...access };
 }
