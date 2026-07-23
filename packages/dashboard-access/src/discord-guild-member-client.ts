@@ -165,6 +165,9 @@ export async function fetchGuildMemberAccess(
 
   if (memberResponse.status === 404) {
     const body = (await memberResponse.json().catch(() => null)) as DiscordErrorResponse | null;
+    // memberResponseの404が確定した時点でguildResponseは使わないため、未消費の
+    // bodyを破棄して接続を解放する(codexレビュー指摘: issue #138)。
+    await guildResponse.body?.cancel();
     if (body?.code === DISCORD_UNKNOWN_MEMBER_ERROR_CODE) {
       return null;
     }
@@ -182,15 +185,22 @@ export async function fetchGuildMemberAccess(
     );
   }
   if (!memberResponse.ok) {
+    await memberResponse.body?.cancel();
+    await guildResponse.body?.cancel();
     throw new DiscordApiError(
       `Failed to load Discord guild member (${memberResponse.status}).`,
       memberResponse.status
     );
   }
   if (guildResponse.status === 404) {
+    // guildResponseの404が確定した時点でmemberResponseは使わないため、未消費の
+    // bodyを破棄して接続を解放する(codexレビュー指摘: issue #138)。
+    await memberResponse.body?.cancel();
     await throwForGuildLookup404(guildResponse, input.guildId);
   }
   if (!guildResponse.ok) {
+    await memberResponse.body?.cancel();
+    await guildResponse.body?.cancel();
     throw new DiscordApiError(
       `Failed to load Discord guild (${guildResponse.status}).`,
       guildResponse.status
