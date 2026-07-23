@@ -16,6 +16,7 @@
     "@sm-bot/config": "workspace:*",
     "@sm-bot/dashboard-access": "workspace:*",
     "@sm-bot/db": "workspace:*",
+    "@sm-bot/logging": "workspace:*",
     "@sm-bot/shared": "workspace:*",
     "@tanstack/react-query": "^5.80.3",
     "@tanstack/react-table": "^8.21.3",
