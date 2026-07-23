@@ -46,6 +46,15 @@ describe("HomePageView", () => {
     expect(html).toContain("Capabilities: <!-- -->0");
   });
 
+  test("renders a link to the guild selection page when authorized", () => {
+    const state: HomePageState = {
+      kind: "authorized",
+      data: { userId: "123", isGuildOwner: false, capabilities: "0" }
+    };
+    const html = renderToString(<HomePageView state={state} />);
+    expect(html).toContain('href="/g"');
+  });
+
   test("renders 'yes' for guild owners", () => {
     const state: HomePageState = {
       kind: "authorized",

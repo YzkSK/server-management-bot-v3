@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { DbClient } from "../client.js";
 import { guilds } from "../schema/index.js";
@@ -17,4 +17,18 @@ export async function upsertGuild(
         updatedAt: sql`now()`
       }
     });
+}
+
+export async function getKnownGuildIds(
+  db: Pick<DbClient, "select">,
+  guildIds: string[]
+): Promise<Set<string>> {
+  if (guildIds.length === 0) return new Set();
+
+  const rows = await db
+    .select({ guildId: guilds.guildId })
+    .from(guilds)
+    .where(and(inArray(guilds.guildId, guildIds), eq(guilds.isActive, true)));
+
+  return new Set(rows.map((row) => row.guildId));
 }

@@ -12,6 +12,7 @@ function context(overrides: Partial<DashboardAccessContext> = {}): DashboardAcce
     guildId: "guild-1",
     isGuildOwner: false,
     capabilities: 0n,
+    discordAccessToken: null,
     ...overrides
   };
 }
@@ -36,6 +37,14 @@ describe("dashboardAccessRouter.me", () => {
     expect(result.userId).toBe("user-1");
     expect(result.isGuildOwner).toBe(false);
     expect(result.capabilities).toBe(CAP.VIEW_LOGS.toString(10));
+  });
+});
+
+describe("dashboardAccessRouter.myGuilds", () => {
+  it("rejects when the session has no Discord access token", async () => {
+    const caller = dashboardAccessRouter.createCaller(context({ discordAccessToken: null }));
+
+    await rejectsWithCode(caller.myGuilds(), "UNAUTHORIZED");
   });
 });
 

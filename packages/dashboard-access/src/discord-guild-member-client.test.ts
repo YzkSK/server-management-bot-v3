@@ -4,6 +4,7 @@ import { afterEach, describe, it, mock } from "node:test";
 import {
   DISCORD_MAX_RETRY_AFTER_MS,
   DiscordApiError,
+  fetchGuildInfo,
   fetchGuildMemberAccess,
   MAX_DISCORD_FETCH_ATTEMPTS
 } from "./discord-guild-member-client.js";
@@ -405,5 +406,30 @@ describe("fetchGuildMemberAccess", () => {
 
     assert.equal(result, null);
     assert.equal(memberCallCount, 1);
+  });
+});
+
+describe("fetchGuildInfo", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("returns the guild id and name", async () => {
+    mock.method(globalThis, "fetch", async () =>
+      jsonResponse(200, { id: GUILD_ID, name: "My Guild" })
+    );
+
+    const result = await fetchGuildInfo(BOT_TOKEN, GUILD_ID);
+
+    assert.deepEqual(result, { id: GUILD_ID, name: "My Guild" });
+  });
+
+  it("throws a DiscordApiError when the guild lookup fails", async () => {
+    mock.method(globalThis, "fetch", async () => jsonResponse(404, { message: "Unknown Guild" }));
+
+    await assert.rejects(
+      () => fetchGuildInfo(BOT_TOKEN, GUILD_ID),
+      (error: unknown) => error instanceof DiscordApiError && error.status === 404
+    );
   });
 });

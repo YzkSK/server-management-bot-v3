@@ -38,13 +38,32 @@ function getQueryClient() {
   return browserQueryClient;
 }
 
+export function guildIdFromPathname(pathname: string): string | null {
+  return pathname.match(/^\/g\/([^/]+)/)?.[1] ?? null;
+}
+
+// httpBatchLinkはProviders生成時(useState初回)に一度だけ作られるため、
+// Reactのレンダー状態(props/state)をheaders()の中で参照することはできない。
+// guildIdはURLそのものなので、Reactの再レンダーを介さず、リクエストが実際に
+// 発火する瞬間にwindow.location.pathnameから直接読む。これにより、遷移直後や
+// 中断されたレンダーが共有状態を汚してしまう競合状態を構造的に避けられる。
+function currentGuildId(): string | null {
+  if (typeof window === "undefined") return null;
+  return guildIdFromPathname(window.location.pathname);
+}
+
 export function Providers({ children }: { children: ReactNode }) {
   const queryClient = getQueryClient();
+
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [
         httpBatchLink({
-          url: "/api/trpc"
+          url: "/api/trpc",
+          headers() {
+            const guildId = currentGuildId();
+            return guildId ? { "x-guild-id": guildId } : {};
+          }
         })
       ]
     })
