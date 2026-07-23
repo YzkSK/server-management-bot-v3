@@ -7,8 +7,8 @@
 - **ベースはダーク基調**(`next-themes`でLight切替も可能にするが、デフォルトはDark)
 - **アクセントカラーのみDiscord Blurple** `#5865f2` を使う。ボタンのprimary、アクティブ状態のインジケーター、フォーカスリングなど「ユーザーの注意を引きたい場所」に限定する
 - それ以外の面(背景・カード・境界線)はshadcn/uiの **neutral** パレットをベースにしたグレースケールで構成する。派手なグラデーションや複数アクセントカラー(green/magenta)は使わない
-- 角丸はshadcn/ui **New York** スタイルの標準値(控えめ)を使う。getdesignのjumbo(120px)のような装飾的な丸みは使わない
-- タイポグラフィは特殊フォント(ABC Ginto Nord等)を導入せず、shadcn/uiのデフォルト(システムフォントスタック)をそのまま使う
+- 角丸はshadcn/ui **radix-mira** プリセットの標準値(控えめ、dense interfaces向け)を使う。getdesignのjumbo(120px)のような装飾的な丸みは使わない
+- タイポグラフィは特殊フォント(ABC Ginto Nord等)を導入せず、shadcn/ui CLIが標準採用しているGeist Sans / Geist Monoをそのまま使う(独自フォントの追加導入は行わない)
 
 ## 不採用にした要素
 
