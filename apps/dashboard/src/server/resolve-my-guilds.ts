@@ -1,4 +1,4 @@
-import type { DashboardAccessCacheClient } from "@sm-bot/dashboard-access";
+import { DiscordApiError, type DashboardAccessCacheClient } from "@sm-bot/dashboard-access";
 import type { DbClient } from "@sm-bot/db";
 import { getKnownGuildIds as getKnownGuildIdsFromDb } from "@sm-bot/db";
 
@@ -64,15 +64,23 @@ export async function resolveMyGuilds(input: ResolveMyGuildsInput): Promise<MyGu
     async (guild) => {
       if (guild.owner) return { id: guild.id, name: guild.name };
 
-      const access = await resolveAccess({
-        db: input.db,
-        cache: input.cache,
-        botToken: input.botToken,
-        guildId: guild.id,
-        userId: input.userId
-      });
+      // botがguildから離脱している(404)場合だけ、このguildを一覧から除外して
+      // 他のguildの取得を継続する。bot token不備(401/403)等は運用上の異常を
+      // 隠さないよう、握り潰さずthrowし続ける。
+      try {
+        const access = await resolveAccess({
+          db: input.db,
+          cache: input.cache,
+          botToken: input.botToken,
+          guildId: guild.id,
+          userId: input.userId
+        });
 
-      return access.capabilities !== 0n ? { id: guild.id, name: guild.name } : null;
+        return access.capabilities !== 0n ? { id: guild.id, name: guild.name } : null;
+      } catch (error) {
+        if (error instanceof DiscordApiError && error.status === 404) return null;
+        throw error;
+      }
     }
   );
 
