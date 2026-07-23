@@ -1,4 +1,4 @@
-import { DiscordApiError, type DashboardAccessCacheClient } from "@sm-bot/dashboard-access";
+import { DiscordUnknownGuildError, type DashboardAccessCacheClient } from "@sm-bot/dashboard-access";
 import type { DbClient } from "@sm-bot/db";
 import { getKnownGuildIds as getKnownGuildIdsFromDb } from "@sm-bot/db";
 
@@ -64,9 +64,10 @@ export async function resolveMyGuilds(input: ResolveMyGuildsInput): Promise<MyGu
     async (guild) => {
       if (guild.owner) return { id: guild.id, name: guild.name };
 
-      // botがguildから離脱している(404)場合だけ、このguildを一覧から除外して
-      // 他のguildの取得を継続する。bot token不備(401/403)等は運用上の異常を
-      // 隠さないよう、握り潰さずthrowし続ける。
+      // botがguildから離脱している(Unknown Guild, code 10004)場合だけ、
+      // このguildを一覧から除外して他のguildの取得を継続する。それ以外の
+      // 想定外の404やbot token不備(401/403)等は運用上の異常を隠さないよう、
+      // 握り潰さずthrowし続ける(issue #138)。
       try {
         const access = await resolveAccess({
           db: input.db,
@@ -78,7 +79,7 @@ export async function resolveMyGuilds(input: ResolveMyGuildsInput): Promise<MyGu
 
         return access.capabilities !== 0n ? { id: guild.id, name: guild.name } : null;
       } catch (error) {
-        if (error instanceof DiscordApiError && error.status === 404) return null;
+        if (error instanceof DiscordUnknownGuildError) return null;
         throw error;
       }
     }

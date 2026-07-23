@@ -112,25 +112,32 @@ export interface DiscordGuildInfo {
   name: string;
 }
 
+// guildの単独lookup(GET /guilds/{id})の404を分類する共通処理。
+// code 10004(Unknown Guild)のみをDiscordUnknownGuildErrorとして扱い、
+// それ以外の未知codeや非JSONボディはログを残してから通常のエラーとして
+// 投げる(issue #138)。fetchGuildInfoとfetchGuildMemberAccessの両方の
+// guild lookupで共有する。
+async function throwForGuildLookup404(response: Response, guildId: string): Promise<never> {
+  const body = (await response.json().catch(() => null)) as DiscordErrorResponse | null;
+  if (body?.code === DISCORD_UNKNOWN_GUILD_ERROR_CODE) {
+    throw new DiscordUnknownGuildError(guildId);
+  }
+  console.error(
+    `[dashboard-access] Unexpected 404 from Discord guild lookup (guildId=${guildId}, code=${body?.code ?? "unknown"}).`
+  );
+  throw new DiscordApiError(
+    `Unexpected 404 from Discord guild lookup (code: ${body?.code ?? "unknown"}).`,
+    404
+  );
+}
+
 // guild名表示のためだけに、guildの基本情報を単独で取得する軽量版
 // (メンバー権限解決とは無関係に呼び出せる)。
 export async function fetchGuildInfo(botToken: string, guildId: string): Promise<DiscordGuildInfo> {
   const response = await fetchWithRetry(`${DISCORD_API_BASE_URL}/guilds/${guildId}`, botToken);
 
   if (response.status === 404) {
-    const body = (await response.json().catch(() => null)) as DiscordErrorResponse | null;
-    if (body?.code === DISCORD_UNKNOWN_GUILD_ERROR_CODE) {
-      throw new DiscordUnknownGuildError(guildId);
-    }
-    // fetchGuildMemberAccessと同様、未知のcodeや非JSONボディの404は
-    // 想定外のためログを残してから伝播する(issue #138)。
-    console.error(
-      `[dashboard-access] Unexpected 404 from Discord guild lookup (guildId=${guildId}, code=${body?.code ?? "unknown"}).`
-    );
-    throw new DiscordApiError(
-      `Unexpected 404 from Discord guild lookup (code: ${body?.code ?? "unknown"}).`,
-      404
-    );
+    await throwForGuildLookup404(response, guildId);
   }
 
   if (!response.ok) {
@@ -179,6 +186,9 @@ export async function fetchGuildMemberAccess(
       `Failed to load Discord guild member (${memberResponse.status}).`,
       memberResponse.status
     );
+  }
+  if (guildResponse.status === 404) {
+    await throwForGuildLookup404(guildResponse, input.guildId);
   }
   if (!guildResponse.ok) {
     throw new DiscordApiError(
