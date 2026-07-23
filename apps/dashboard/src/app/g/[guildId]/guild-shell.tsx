@@ -9,11 +9,19 @@ interface NavItem {
 // 将来ページを追加するときはここに1行足すだけでナビに反映される。
 const NAV_ITEMS: NavItem[] = [{ label: "Logs", hrefSuffix: "/logs" }];
 
-export function GuildShell({ guildId, children }: { guildId: string; children: ReactNode }) {
+export function GuildShell({
+  guildId,
+  guildName,
+  children
+}: {
+  guildId: string;
+  guildName: string;
+  children: ReactNode;
+}) {
   return (
     <div>
       <header>
-        <span>{guildId}</span>
+        <span>{guildName}</span>
         <Link href="/g">Switch server</Link>
       </header>
       <nav>

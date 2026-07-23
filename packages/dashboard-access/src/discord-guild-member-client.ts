@@ -96,6 +96,24 @@ async function fetchWithRetry(url: string, botToken: string): Promise<Response> 
   return response!;
 }
 
+export interface DiscordGuildInfo {
+  id: string;
+  name: string;
+}
+
+// guild名表示のためだけに、guildの基本情報を単独で取得する軽量版
+// (メンバー権限解決とは無関係に呼び出せる)。
+export async function fetchGuildInfo(botToken: string, guildId: string): Promise<DiscordGuildInfo> {
+  const response = await fetchWithRetry(`${DISCORD_API_BASE_URL}/guilds/${guildId}`, botToken);
+
+  if (!response.ok) {
+    throw new DiscordApiError(`Failed to load Discord guild (${response.status}).`, response.status);
+  }
+
+  const guild = (await response.json()) as { id: string; name: string };
+  return { id: guild.id, name: guild.name };
+}
+
 // Discord's member endpoint doesn't expose owner status, so the guild is
 // fetched in parallel to compare owner_id against the caller.
 export async function fetchGuildMemberAccess(

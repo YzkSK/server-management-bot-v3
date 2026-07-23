@@ -4,14 +4,14 @@ import { renderToString } from "react-dom/server";
 import { GuildShell } from "./guild-shell";
 
 describe("GuildShell", () => {
-  test("renders the guild id, a link back to /g, and the nav items", () => {
+  test("renders the guild name, a link back to /g, and the nav items", () => {
     const html = renderToString(
-      <GuildShell guildId="guild-1">
+      <GuildShell guildId="guild-1" guildName="My Guild">
         <p>child content</p>
       </GuildShell>
     );
 
-    expect(html).toContain("guild-1");
+    expect(html).toContain("My Guild");
     expect(html).toContain('href="/g"');
     expect(html).toContain('href="/g/guild-1/logs"');
     expect(html).toContain("Logs");

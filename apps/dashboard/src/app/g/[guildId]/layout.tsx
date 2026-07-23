@@ -1,5 +1,5 @@
 import { parseDashboardAuthEnv } from "@sm-bot/config";
-import { DiscordApiError } from "@sm-bot/dashboard-access";
+import { DiscordApiError, fetchGuildInfo } from "@sm-bot/dashboard-access";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -10,7 +10,6 @@ import {
   resolveDashboardAccessForRequest,
   type ResolvedDashboardAccess
 } from "../../../server/resolve-dashboard-access";
-import { GuildIdSync } from "./guild-id-sync";
 import { GuildShell } from "./guild-shell";
 
 const env = parseDashboardAuthEnv();
@@ -55,9 +54,21 @@ export default async function GuildLayout({
     redirect("/g");
   }
 
+  let guildName: string;
+  try {
+    guildName = (await fetchGuildInfo(env.DISCORD_BOT_TOKEN, guildId)).name;
+  } catch (error) {
+    // resolveDashboardAccessForRequestの権限キャッシュが残っている間にbotが
+    // guildから外れた等、ここでも404はシステムエラーではなく「アクセス不可」
+    // として扱う(上のresolveDashboardAccessForRequestと同じ方針)。
+    if (error instanceof DiscordApiError && error.status === 404) {
+      redirect("/g");
+    }
+    throw error;
+  }
+
   return (
-    <GuildShell guildId={guildId}>
-      <GuildIdSync guildId={guildId} />
+    <GuildShell guildId={guildId} guildName={guildName}>
       {children}
     </GuildShell>
   );
