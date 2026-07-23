@@ -14,6 +14,9 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
-    discordAccessToken?: string;
+    discordAccessToken?: string | undefined;
+    discordRefreshToken?: string | undefined;
+    // Discordアクセストークンの失効時刻(UNIX秒)。account.expires_atをそのまま保持する。
+    discordExpiresAt?: number | undefined;
   }
 }
