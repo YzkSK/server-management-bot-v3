@@ -229,8 +229,9 @@ export async function refreshDiscordAccessToken(
     while (now() < deadline) {
       await wait(POLL_INTERVAL_MS);
       let polled: string | null;
+      let lockStillHeld: string | null;
       try {
-        polled = await input.cache.get(resultKey);
+        [polled, lockStillHeld] = await Promise.all([input.cache.get(resultKey), input.cache.get(lockKey)]);
       } catch {
         return { kind: "transient_failure" };
       }
@@ -238,11 +239,30 @@ export async function refreshDiscordAccessToken(
         const parsed = parseCachedResult(polled);
         if (parsed) return parsed;
       }
+      // ロック保持者が既に解放済み(=処理を終えている)なのに結果キャッシュが
+      // 無い場合、その結果はtransient_failureで確定している(成功/invalid_grantは
+      // 解放前に必ずキャッシュされるため)。デッドラインまで待たずに即座に返す。
+      if (lockStillHeld === null) {
+        return { kind: "transient_failure" };
+      }
     }
     return { kind: "transient_failure" };
   }
 
   try {
+    // ロック取得までの間に他のリクエストが既にリフレッシュを完了させている場合が
+    // あるため、Discordへ再度リクエストする前に結果キャッシュを再確認する。
+    let recachedAfterLock: string | null = null;
+    try {
+      recachedAfterLock = await input.cache.get(resultKey);
+    } catch {
+      // 再確認に失敗しても、このままDiscordへ通常通りリフレッシュを試みる。
+    }
+    if (recachedAfterLock !== null) {
+      const parsed = parseCachedResult(recachedAfterLock);
+      if (parsed) return parsed;
+    }
+
     const outcome = await requestDiscordTokenRefresh({
       refreshToken: input.refreshToken,
       clientId: input.clientId,

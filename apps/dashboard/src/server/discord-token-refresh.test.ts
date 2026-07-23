@@ -275,6 +275,106 @@ describe("refreshDiscordAccessToken", () => {
 
     expect(result).toEqual({ kind: "transient_failure" });
   });
+
+  test("returns transient_failure promptly once the lock holder releases without a result, instead of waiting the full timeout", async () => {
+    const cache = createInMemoryCache();
+    let resolveFetch: (() => void) | undefined;
+    const blocker = new Promise<void>((resolve) => {
+      resolveFetch = resolve;
+    });
+
+    const holderFetchImpl = (async () => {
+      await blocker;
+      return new Response("service unavailable", { status: 503 });
+    }) as unknown as typeof fetch;
+
+    const holderPromise = refreshDiscordAccessToken({
+      cache,
+      refreshToken: "quick-failure-refresh-token",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      fetchImpl: holderFetchImpl
+    });
+
+    // ロック取得を確実にholder側に先行させる
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const waiterPromise = refreshDiscordAccessToken({
+      cache,
+      refreshToken: "quick-failure-refresh-token",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      fetchImpl: (async () => {
+        throw new Error("waiter must not call Discord directly");
+      }) as unknown as typeof fetch
+    });
+
+    setTimeout(() => resolveFetch?.(), 30);
+
+    const start = Date.now();
+    const [holderResult, waiterResult] = await Promise.all([holderPromise, waiterPromise]);
+    const elapsedMs = Date.now() - start;
+
+    expect(holderResult).toEqual({ kind: "transient_failure" });
+    expect(waiterResult).toEqual({ kind: "transient_failure" });
+    // MAX_WAIT_MS(20秒)を待たず、ロック解放を検知して即座に返ることを確認する
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+
+  test("rechecks the shared result cache after acquiring the lock, avoiding a redundant Discord call", async () => {
+    const store = new Map<string, string>();
+    let fetchCalled = false;
+    const cache: DiscordTokenRefreshCacheClient = {
+      get: async (key) => store.get(key) ?? null,
+      set: async (key, value, options) => {
+        if (options.NX && store.has(key)) return null;
+        store.set(key, value);
+        if (key.startsWith("dashboard:discord-token-refresh:lock:")) {
+          // 自分がロックを取得した直後に、別のリクエストが既にリフレッシュを完了させ
+          // 結果キャッシュへ書き込んだ状況を再現する。
+          const resultKey = key.replace(":lock:", ":result:");
+          store.set(
+            resultKey,
+            JSON.stringify({
+              kind: "success",
+              token: { accessToken: "raced-a", refreshToken: "raced-b", expiresAt: 123 }
+            })
+          );
+        }
+        return "OK";
+      },
+      eval: async (_script, options) => {
+        const [key] = options.keys;
+        const [owner] = options.arguments;
+        if (!key) return 0;
+        if (store.get(key) === owner) {
+          store.delete(key);
+          return 1;
+        }
+        return 0;
+      }
+    };
+
+    const result = await refreshDiscordAccessToken({
+      cache,
+      refreshToken: "race-refresh-token",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      fetchImpl: (async () => {
+        fetchCalled = true;
+        return new Response(
+          JSON.stringify({ access_token: "x", refresh_token: "y", expires_in: 604800 }),
+          { status: 200 }
+        );
+      }) as unknown as typeof fetch
+    });
+
+    expect(fetchCalled).toBe(false);
+    expect(result).toEqual({
+      kind: "success",
+      token: { accessToken: "raced-a", refreshToken: "raced-b", expiresAt: 123 }
+    });
+  });
 });
 
 describe("refreshDiscordAccessToken cache resilience", () => {
