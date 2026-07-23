@@ -24,7 +24,14 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
-      "env": ["DATABASE_URL"]
+      "env": [
+        "DISCORD_CLIENT_ID",
+        "DISCORD_CLIENT_SECRET",
+        "DISCORD_BOT_TOKEN",
+        "NEXTAUTH_SECRET",
+        "DATABASE_URL",
+        "REDIS_URL"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^build"],
