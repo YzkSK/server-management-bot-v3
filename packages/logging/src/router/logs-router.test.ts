@@ -139,4 +139,24 @@ describe("logsRouter.list", () => {
 
     assert.equal(result.nextCursor, null);
   });
+
+  it("converts cursor's receivedAt string to a Date object when passed to listLogEvents", async () => {
+    let capturedBefore: { receivedAt: Date; id: string } | undefined;
+    const caller = router(async (_db, input) => {
+      capturedBefore = input.before;
+      return [];
+    }).createCaller(context({ capabilities: CAP.VIEW_LOGS }));
+
+    await caller.list({
+      category: "all",
+      cursor: {
+        receivedAt: "2026-01-02T00:00:00.000Z",
+        id: "550e8400-e29b-41d4-a716-446655440000"
+      }
+    });
+
+    assert.ok(capturedBefore, "before should be defined");
+    assert.deepEqual(capturedBefore!.receivedAt, new Date("2026-01-02T00:00:00.000Z"));
+    assert.equal(capturedBefore!.id, "550e8400-e29b-41d4-a716-446655440000");
+  });
 });
