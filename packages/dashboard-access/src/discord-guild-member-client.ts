@@ -21,6 +21,17 @@ export class DiscordApiError extends Error {
   }
 }
 
+// Unknown Guild(code 10004)専用のエラー種別。呼び出し側はこれのみを
+// 「アクセス不可のguildId」として扱ってよく、それ以外の404
+// (未知のcodeや非JSONボディ)はこのクラスにはならず、通常のエラーとして
+// 握り潰さずに伝播する(issue #138)。
+export class DiscordUnknownGuildError extends DiscordApiError {
+  constructor(guildId: string) {
+    super(`Unknown Discord guild (${guildId}).`, 404);
+    this.name = "DiscordUnknownGuildError";
+  }
+}
+
 export interface DiscordGuildMemberAccess {
   roleIds: string[];
   isGuildOwner: boolean;
@@ -101,10 +112,33 @@ export interface DiscordGuildInfo {
   name: string;
 }
 
+// guildの単独lookup(GET /guilds/{id})の404を分類する共通処理。
+// code 10004(Unknown Guild)のみをDiscordUnknownGuildErrorとして扱い、
+// それ以外の未知codeや非JSONボディはログを残してから通常のエラーとして
+// 投げる(issue #138)。fetchGuildInfoとfetchGuildMemberAccessの両方の
+// guild lookupで共有する。
+async function throwForGuildLookup404(response: Response, guildId: string): Promise<never> {
+  const body = (await response.json().catch(() => null)) as DiscordErrorResponse | null;
+  if (body?.code === DISCORD_UNKNOWN_GUILD_ERROR_CODE) {
+    throw new DiscordUnknownGuildError(guildId);
+  }
+  console.error(
+    `[dashboard-access] Unexpected 404 from Discord guild lookup (guildId=${guildId}, code=${body?.code ?? "unknown"}).`
+  );
+  throw new DiscordApiError(
+    `Unexpected 404 from Discord guild lookup (code: ${body?.code ?? "unknown"}).`,
+    404
+  );
+}
+
 // guild名表示のためだけに、guildの基本情報を単独で取得する軽量版
 // (メンバー権限解決とは無関係に呼び出せる)。
 export async function fetchGuildInfo(botToken: string, guildId: string): Promise<DiscordGuildInfo> {
   const response = await fetchWithRetry(`${DISCORD_API_BASE_URL}/guilds/${guildId}`, botToken);
+
+  if (response.status === 404) {
+    await throwForGuildLookup404(response, guildId);
+  }
 
   if (!response.ok) {
     // 未消費のbodyを破棄して接続を確実に解放する(fetchWithRetry内のリトライ時と同じ理由)。
@@ -131,24 +165,42 @@ export async function fetchGuildMemberAccess(
 
   if (memberResponse.status === 404) {
     const body = (await memberResponse.json().catch(() => null)) as DiscordErrorResponse | null;
+    // memberResponseの404が確定した時点でguildResponseは使わないため、未消費の
+    // bodyを破棄して接続を解放する(codexレビュー指摘: issue #138)。
+    await guildResponse.body?.cancel();
     if (body?.code === DISCORD_UNKNOWN_MEMBER_ERROR_CODE) {
       return null;
     }
     if (body?.code === DISCORD_UNKNOWN_GUILD_ERROR_CODE) {
-      throw new DiscordApiError(`Unknown Discord guild (${input.guildId}).`, 404);
+      throw new DiscordUnknownGuildError(input.guildId);
     }
+    // 未知のcodeや非JSONボディの404は想定外のため、サイレントに
+    // Unknown Guild扱いされないようログを残してから伝播する(issue #138)。
+    console.error(
+      `[dashboard-access] Unexpected 404 from Discord guild member lookup (guildId=${input.guildId}, code=${body?.code ?? "unknown"}).`
+    );
     throw new DiscordApiError(
       `Unexpected 404 from Discord guild member lookup (code: ${body?.code ?? "unknown"}).`,
       404
     );
   }
   if (!memberResponse.ok) {
+    await memberResponse.body?.cancel();
+    await guildResponse.body?.cancel();
     throw new DiscordApiError(
       `Failed to load Discord guild member (${memberResponse.status}).`,
       memberResponse.status
     );
   }
+  if (guildResponse.status === 404) {
+    // guildResponseの404が確定した時点でmemberResponseは使わないため、未消費の
+    // bodyを破棄して接続を解放する(codexレビュー指摘: issue #138)。
+    await memberResponse.body?.cancel();
+    await throwForGuildLookup404(guildResponse, input.guildId);
+  }
   if (!guildResponse.ok) {
+    await memberResponse.body?.cancel();
+    await guildResponse.body?.cancel();
     throw new DiscordApiError(
       `Failed to load Discord guild (${guildResponse.status}).`,
       guildResponse.status

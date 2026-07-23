@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DiscordApiError } from "@sm-bot/dashboard-access";
+import { DiscordApiError, DiscordUnknownGuildError } from "@sm-bot/dashboard-access";
 import { CAP } from "@sm-bot/shared";
 
 import type { DiscordUserGuild } from "./discord-user-guilds.js";
@@ -67,7 +67,7 @@ describe("resolveMyGuilds", () => {
     assert.deepEqual(result, [{ id: "guild-1", name: "Has Capability" }]);
   });
 
-  it("excludes a guild whose resolveDashboardAccessForRequest call 404s (bot left), but keeps resolving the rest", async () => {
+  it("excludes a guild whose resolveDashboardAccessForRequest call throws DiscordUnknownGuildError (bot left), but keeps resolving the rest", async () => {
     const discordGuilds: DiscordUserGuild[] = [
       { id: "guild-1", name: "Bot Left", owner: false },
       { id: "guild-2", name: "Still Accessible", owner: false }
@@ -79,7 +79,7 @@ describe("resolveMyGuilds", () => {
       getKnownGuildIds: async () => new Set(["guild-1", "guild-2"]),
       resolveDashboardAccessForRequest: async ({ guildId }: { guildId: string }) => {
         if (guildId === "guild-1") {
-          throw new DiscordApiError("Unknown Discord guild.", 404);
+          throw new DiscordUnknownGuildError(guildId);
         }
         return { isGuildOwner: false, capabilities: CAP.VIEW_LOGS };
       }
@@ -102,6 +102,24 @@ describe("resolveMyGuilds", () => {
           }
         }),
       (error: unknown) => error instanceof DiscordApiError && error.status === 401
+    );
+  });
+
+  it("does not swallow an unexpected 404 DiscordApiError (unknown code, not Unknown Guild)", async () => {
+    const discordGuilds: DiscordUserGuild[] = [{ id: "guild-1", name: "Any Guild", owner: false }];
+
+    await assert.rejects(
+      () =>
+        resolveMyGuilds({
+          ...BASE_INPUT,
+          fetchCurrentUserDiscordGuilds: async () => discordGuilds,
+          getKnownGuildIds: async () => new Set(["guild-1"]),
+          resolveDashboardAccessForRequest: async () => {
+            throw new DiscordApiError("Unexpected 404 from Discord guild lookup (code: 99999).", 404);
+          }
+        }),
+      (error: unknown) =>
+        error instanceof DiscordApiError && !(error instanceof DiscordUnknownGuildError) && error.status === 404
     );
   });
 

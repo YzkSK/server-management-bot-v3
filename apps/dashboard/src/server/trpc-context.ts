@@ -1,5 +1,5 @@
 import { parseDashboardAuthEnv } from "@sm-bot/config";
-import { DiscordApiError, type DashboardAccessContext } from "@sm-bot/dashboard-access";
+import { DiscordUnknownGuildError, type DashboardAccessContext } from "@sm-bot/dashboard-access";
 import { createDbConnection, type DbClient } from "@sm-bot/db";
 import { getToken as getTokenDefault } from "next-auth/jwt";
 import type { NextRequest } from "next/server";
@@ -79,10 +79,11 @@ export async function createContext(
       userId
     });
   } catch (error) {
-    // guildIdはクライアントが自由に設定できるヘッダー値。Discordが404(botが
-    // 参加していない/存在しないguild)を返すケースは、layout.tsxの/gリダイレクトと
-    // 同様に「アクセス不可」として扱い、tRPC呼び出し全体を失敗させない。
-    if (error instanceof DiscordApiError && error.status === 404) {
+    // guildIdはクライアントが自由に設定できるヘッダー値。DiscordがUnknown
+    // Guild(code 10004)を返すケースは、layout.tsxの/gリダイレクトと同様に
+    // 「アクセス不可」として扱い、tRPC呼び出し全体を失敗させない。それ以外の
+    // 想定外の404は本当のエラーとして伝播させる(issue #138)。
+    if (error instanceof DiscordUnknownGuildError) {
       return { userId, guildId, isGuildOwner: false, capabilities: 0n, discordAccessToken };
     }
     throw error;

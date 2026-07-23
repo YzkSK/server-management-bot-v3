@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DiscordApiError } from "@sm-bot/dashboard-access";
+import { DiscordApiError, DiscordUnknownGuildError } from "@sm-bot/dashboard-access";
 import type { NextRequest } from "next/server";
 
 import { createContext } from "./trpc-context.js";
@@ -63,12 +63,12 @@ describe("createContext", () => {
     assert.equal(context.isGuildOwner, true);
   });
 
-  it("treats a 404 DiscordApiError (bot not in guild) as an unauthenticated context instead of throwing", async () => {
+  it("treats a DiscordUnknownGuildError (bot not in guild) as an unauthenticated context instead of throwing", async () => {
     const context = await createContext(fakeRequest({ "x-guild-id": "unknown-guild" }), {
       ...NOOP_DEPS,
       getToken: async () => ({ sub: "user-1", discordAccessToken: "discord-token" }) as never,
       resolveDashboardAccessForRequest: async () => {
-        throw new DiscordApiError("Unknown Discord guild.", 404);
+        throw new DiscordUnknownGuildError("unknown-guild");
       }
     });
 
@@ -92,6 +92,21 @@ describe("createContext", () => {
           }
         }),
       (error: unknown) => error instanceof DiscordApiError && error.status === 401
+    );
+  });
+
+  it("rethrows an unexpected 404 DiscordApiError (unknown code, not Unknown Guild) instead of swallowing it", async () => {
+    await assert.rejects(
+      () =>
+        createContext(fakeRequest({ "x-guild-id": "guild-1" }), {
+          ...NOOP_DEPS,
+          getToken: async () => ({ sub: "user-1", discordAccessToken: "discord-token" }) as never,
+          resolveDashboardAccessForRequest: async () => {
+            throw new DiscordApiError("Unexpected 404 from Discord guild lookup (code: 99999).", 404);
+          }
+        }),
+      (error: unknown) =>
+        error instanceof DiscordApiError && !(error instanceof DiscordUnknownGuildError) && error.status === 404
     );
   });
 });

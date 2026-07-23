@@ -1,5 +1,5 @@
 import { parseDashboardAuthEnv } from "@sm-bot/config";
-import { DiscordApiError, fetchGuildInfo } from "@sm-bot/dashboard-access";
+import { DiscordUnknownGuildError, fetchGuildInfo } from "@sm-bot/dashboard-access";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -39,12 +39,12 @@ export default async function GuildLayout({
       userId
     });
   } catch (error) {
-    // guildIdはURLバー直打ちでユーザーが自由に変更できる。Discordが
-    // 404(botが参加していない/存在しないguild)を返すケースはシステム
-    // エラーではなく「このguildにはアクセスできない」という通常の
-    // 利用者操作なので、/gへの誘導に変換する。それ以外(401/429/5xx等)
-    // は本当のエラーとして握り潰さずthrowし続ける。
-    if (error instanceof DiscordApiError && error.status === 404) {
+    // guildIdはURLバー直打ちでユーザーが自由に変更できる。DiscordがUnknown
+    // Guild(code 10004)を返すケースはシステムエラーではなく「このguildには
+    // アクセスできない」という通常の利用者操作なので、/gへの誘導に変換する。
+    // それ以外(未知の404・401/429/5xx等)は本当のエラーとして握り潰さず
+    // throwし続ける(issue #138)。
+    if (error instanceof DiscordUnknownGuildError) {
       redirect("/g");
     }
     throw error;
@@ -59,9 +59,9 @@ export default async function GuildLayout({
     guildName = (await fetchGuildInfo(env.DISCORD_BOT_TOKEN, guildId)).name;
   } catch (error) {
     // resolveDashboardAccessForRequestの権限キャッシュが残っている間にbotが
-    // guildから外れた等、ここでも404はシステムエラーではなく「アクセス不可」
-    // として扱う(上のresolveDashboardAccessForRequestと同じ方針)。
-    if (error instanceof DiscordApiError && error.status === 404) {
+    // guildから外れた等、ここでもUnknown Guildはシステムエラーではなく
+    // 「アクセス不可」として扱う(上のresolveDashboardAccessForRequestと同じ方針)。
+    if (error instanceof DiscordUnknownGuildError) {
       redirect("/g");
     }
     throw error;
