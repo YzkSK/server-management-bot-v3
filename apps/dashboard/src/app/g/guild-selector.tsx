@@ -15,7 +15,9 @@ export function GuildSelectorView({ state }: { state: GuildSelectorState }) {
   }
 
   if (state.kind === "error") {
-    return <p>Error: {state.message}</p>;
+    // tRPCの内部エラーメッセージをそのまま利用者に見せない(セキュリティ/UX上の理由)。
+    // 詳細はブラウザ/サーバーのログで追跡する。
+    return <p>ギルド一覧の取得に失敗しました。</p>;
   }
 
   if (state.guilds.length === 0) {

@@ -9,11 +9,12 @@ describe("GuildSelectorView", () => {
     expect(html).toContain("Loading...");
   });
 
-  test("renders an error message on failure", () => {
+  test("renders a generic error message on failure without leaking the raw error", () => {
     const html = renderToString(
       <GuildSelectorView state={{ kind: "error", message: "boom" }} />
     );
-    expect(html).toContain("Error: <!-- -->boom");
+    expect(html).toContain("ギルド一覧の取得に失敗しました。");
+    expect(html).not.toContain("boom");
   });
 
   test("renders a message when there are no accessible guilds", () => {
