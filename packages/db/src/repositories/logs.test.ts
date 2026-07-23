@@ -12,6 +12,7 @@ import {
   deleteLogEventsOlderThan,
   getUnsyncedLogEvents,
   insertLogEvent,
+  listLogEvents,
   markLogEventStreamSynced
 } from "./logs.js";
 
@@ -263,5 +264,147 @@ describe("deleteLogEventsOlderThan", () => {
       .where(eq(logs.guildId, TEST_GUILD_ID));
     assert.equal(remaining.length, 1);
     assert.equal(remaining[0]?.id, second.id);
+  });
+});
+
+describe("listLogEvents", () => {
+  let connection: DbConnection;
+
+  before(() => {
+    const databaseUrl = parseDatabaseEnv().DATABASE_URL;
+    assertLocalDatabase(databaseUrl);
+    connection = createDbConnection(databaseUrl);
+  });
+
+  after(async () => {
+    await connection.db.delete(logs).where(eq(logs.guildId, TEST_GUILD_ID));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, TEST_GUILD_ID));
+    await connection.close();
+  });
+
+  beforeEach(async () => {
+    await connection.db.delete(logs).where(eq(logs.guildId, TEST_GUILD_ID));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, TEST_GUILD_ID));
+    await connection.db.insert(guilds).values({ guildId: TEST_GUILD_ID });
+  });
+
+  it("returns only rows for the requested guild, newest first", async () => {
+    const otherGuildId = `${TEST_GUILD_ID}-other`;
+    await connection.db.insert(guilds).values({ guildId: otherGuildId });
+
+    const older = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+    const newer = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-02T00:00:00.000Z"),
+      payload: {}
+    });
+    await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: otherGuildId,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-03T00:00:00.000Z"),
+      payload: {}
+    });
+
+    const result = await listLogEvents(connection.db, {
+      guildId: TEST_GUILD_ID,
+      limit: 10
+    });
+
+    assert.deepEqual(
+      result.map((row) => row.id),
+      [newer.id, older.id]
+    );
+
+    await connection.db.delete(logs).where(eq(logs.guildId, otherGuildId));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, otherGuildId));
+  });
+
+  it("filters by eventNamePrefixes when provided", async () => {
+    const messageLog = await insertLogEvent(connection.db, {
+      eventName: "message.delete",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+    await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-02T00:00:00.000Z"),
+      payload: {}
+    });
+
+    const result = await listLogEvents(connection.db, {
+      guildId: TEST_GUILD_ID,
+      eventNamePrefixes: ["message."],
+      limit: 10
+    });
+
+    assert.deepEqual(
+      result.map((row) => row.id),
+      [messageLog.id]
+    );
+  });
+
+  it("paginates using the before cursor, excluding the cursor row itself", async () => {
+    const first = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+    const second = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-02T00:00:00.000Z"),
+      payload: {}
+    });
+    const third = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-03T00:00:00.000Z"),
+      payload: {}
+    });
+
+    const firstPage = await listLogEvents(connection.db, {
+      guildId: TEST_GUILD_ID,
+      limit: 2
+    });
+    assert.deepEqual(
+      firstPage.map((row) => row.id),
+      [third.id, second.id]
+    );
+
+    const lastRow = firstPage[firstPage.length - 1]!;
+    const secondPage = await listLogEvents(connection.db, {
+      guildId: TEST_GUILD_ID,
+      before: { receivedAt: lastRow.receivedAt, id: lastRow.id },
+      limit: 2
+    });
+    assert.deepEqual(
+      secondPage.map((row) => row.id),
+      [first.id]
+    );
+  });
+
+  it("returns an empty array when the guild has no logs", async () => {
+    const result = await listLogEvents(connection.db, {
+      guildId: TEST_GUILD_ID,
+      limit: 10
+    });
+    assert.deepEqual(result, []);
   });
 });

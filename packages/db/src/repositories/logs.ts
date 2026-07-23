@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, like, lt, or } from "drizzle-orm";
 import type { NormalizedEvent } from "@sm-bot/shared";
 
 import type { DbClient } from "../client.js";
@@ -107,4 +107,71 @@ export async function deleteLogEventsOlderThan(
     .returning({ id: logs.id });
 
   return deleted.length;
+}
+
+export interface LogEventRow {
+  id: string;
+  eventName: string;
+  guildId: string | null;
+  actorId: string | null;
+  channelId: string | null;
+  messageId: string | null;
+  eventTimestamp: Date;
+  receivedAt: Date;
+  realtimeEnabled: boolean;
+  payload: Record<string, unknown>;
+}
+
+export interface ListLogEventsInput {
+  guildId: string;
+  eventNamePrefixes?: readonly string[] | null;
+  before?: { receivedAt: Date; id: string };
+  limit: number;
+}
+
+export async function listLogEvents(
+  db: DbClient,
+  input: ListLogEventsInput
+): Promise<LogEventRow[]> {
+  const conditions = [eq(logs.guildId, input.guildId)];
+
+  if (input.eventNamePrefixes && input.eventNamePrefixes.length > 0) {
+    const prefixConditions = input.eventNamePrefixes.map((prefix) =>
+      like(logs.eventName, `${prefix}%`)
+    );
+    const prefixFilter = or(...prefixConditions);
+    if (prefixFilter) {
+      conditions.push(prefixFilter);
+    }
+  }
+
+  if (input.before) {
+    const cursorFilter = or(
+      lt(logs.receivedAt, input.before.receivedAt),
+      and(eq(logs.receivedAt, input.before.receivedAt), lt(logs.id, input.before.id))
+    );
+    if (cursorFilter) {
+      conditions.push(cursorFilter);
+    }
+  }
+
+  const rows = await db
+    .select({
+      id: logs.id,
+      eventName: logs.eventName,
+      guildId: logs.guildId,
+      actorId: logs.actorId,
+      channelId: logs.channelId,
+      messageId: logs.messageId,
+      eventTimestamp: logs.eventTimestamp,
+      receivedAt: logs.receivedAt,
+      realtimeEnabled: logs.realtimeEnabled,
+      payload: logs.payload
+    })
+    .from(logs)
+    .where(and(...conditions))
+    .orderBy(desc(logs.receivedAt), desc(logs.id))
+    .limit(input.limit);
+
+  return rows as LogEventRow[];
 }
