@@ -4,6 +4,8 @@ import { isServer, QueryClient, QueryClientProvider } from "@tanstack/react-quer
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { useState, type ReactNode } from "react";
 
+import { ThemeProvider } from "../components/theme-provider";
+import { Toaster } from "../components/ui/sonner";
 import { trpc } from "../trpc-client";
 
 function makeQueryClient() {
@@ -71,7 +73,12 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+          {children}
+          <Toaster />
+        </ThemeProvider>
+      </QueryClientProvider>
     </trpc.Provider>
   );
 }
