@@ -34,16 +34,16 @@ describe("authOptions.callbacks.jwt", () => {
 });
 
 describe("authOptions.callbacks.session", () => {
-  test("exposes the Discord access token on session.user", async () => {
+  test("exposes the user id but not the Discord access token on session.user", async () => {
     const session = { user: {}, expires: "2099-01-01" } as never;
     const token: JWT = { sub: "user-1", discordAccessToken: "discord-token-abc" };
 
     // next-authの型定義上、sessionコールバックの戻り値は`Session | DefaultSession`という
     // union型になっている(next-auth/core/types.d.tsのCallbacksOptions["session"]を参照)。
-    // DefaultSessionはid/discordAccessToken拡張前の狭い型のため、unionのままでは
-    // `result.user?.id`等にアクセスできない。実装(auth.ts)のsessionコールバックは常に
-    // 拡張済みのSession(next-auth.d.tsでuser.id/discordAccessTokenを追加)を返すため、
-    // ここでの`as Session`は実挙動に基づく正当なナローイングである。
+    // DefaultSessionはid拡張前の狭い型のため、unionのままでは`result.user?.id`等に
+    // アクセスできない。実装(auth.ts)のsessionコールバックは常に拡張済みのSession
+    // (next-auth.d.tsでuser.idを追加)を返すため、ここでの`as Session`は実挙動に
+    // 基づく正当なナローイングである。
     const result = (await authOptions.callbacks!.session!({
       session,
       token,
@@ -53,6 +53,6 @@ describe("authOptions.callbacks.session", () => {
     })) as Session;
 
     expect(result.user?.id).toBe("user-1");
-    expect(result.user?.discordAccessToken).toBe("discord-token-abc");
+    expect(result.user).not.toHaveProperty("discordAccessToken");
   });
 });

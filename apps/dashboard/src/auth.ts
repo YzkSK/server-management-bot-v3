@@ -27,9 +27,11 @@ export const authOptions: AuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      // discordAccessTokenは/api/auth/session経由でクライアントに露出してしまうため、
+      // sessionには含めない。サーバー側でDiscordトークンが必要な場合はnext-auth/jwtの
+      // getTokenでJWTを直接読む(trpc-context.tsのcreateContext参照)。
       if (session.user) {
         session.user.id = token.sub;
-        session.user.discordAccessToken = token.discordAccessToken ?? null;
       }
       return session;
     }
