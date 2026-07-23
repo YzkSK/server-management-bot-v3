@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { ThemeToggle } from "../components/theme-toggle";
 import { Providers } from "./providers";
+import "./globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
