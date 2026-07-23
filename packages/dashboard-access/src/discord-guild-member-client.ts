@@ -107,6 +107,8 @@ export async function fetchGuildInfo(botToken: string, guildId: string): Promise
   const response = await fetchWithRetry(`${DISCORD_API_BASE_URL}/guilds/${guildId}`, botToken);
 
   if (!response.ok) {
+    // 未消費のbodyを破棄して接続を確実に解放する(fetchWithRetry内のリトライ時と同じ理由)。
+    await response.body?.cancel();
     throw new DiscordApiError(`Failed to load Discord guild (${response.status}).`, response.status);
   }
 
