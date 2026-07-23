@@ -139,6 +139,36 @@ describe("LogsPageView", () => {
     expect(strippedHtml).toContain("member.join");
   });
 
+  test("ignores a stale viewMode='raw' when canViewRaw is false (defense in depth)", () => {
+    const entries: LogEntryData[] = [
+      {
+        id: "log-1",
+        eventName: "member.join",
+        actorId: "user-1",
+        channelId: null,
+        messageId: null,
+        eventTimestamp: "2026-01-01T00:00:00.000Z",
+        receivedAt: "2026-01-01T00:00:00.000Z",
+        payload: { foo: "bar" }
+      }
+    ];
+
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loaded", entries, hasNextPage: false, isFetchingNextPage: false }}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="raw"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+      />
+    );
+
+    expect(html).not.toContain("<pre>");
+    expect(html).toContain("member.join");
+  });
+
   test("shows a Load more button only when hasNextPage is true", () => {
     const withMore = renderToString(
       <LogsPageView
