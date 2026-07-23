@@ -356,6 +356,41 @@ describe("listLogEvents", () => {
     );
   });
 
+  it("filters by multiple eventNamePrefixes and returns rows matching any prefix", async () => {
+    const messageLog = await insertLogEvent(connection.db, {
+      eventName: "message.delete",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+    const memberLog = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-02T00:00:00.000Z"),
+      payload: {}
+    });
+    await insertLogEvent(connection.db, {
+      eventName: "guild.update",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-03T00:00:00.000Z"),
+      payload: {}
+    });
+
+    const result = await listLogEvents(connection.db, {
+      guildId: TEST_GUILD_ID,
+      eventNamePrefixes: ["message.", "member."],
+      limit: 10
+    });
+
+    assert.deepEqual(
+      result.map((row) => row.id),
+      [memberLog.id, messageLog.id]
+    );
+  });
+
   it("paginates using the before cursor, excluding the cursor row itself", async () => {
     const first = await insertLogEvent(connection.db, {
       eventName: "member.join",
@@ -397,6 +432,71 @@ describe("listLogEvents", () => {
     assert.deepEqual(
       secondPage.map((row) => row.id),
       [first.id]
+    );
+  });
+
+  it("uses id as tie-break when multiple rows share the same receivedAt", async () => {
+    const sameTime = new Date("2026-01-02T00:00:00.000Z");
+    const tiedRowA = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: sameTime,
+      payload: {}
+    });
+    const tiedRowB = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: sameTime,
+      payload: {}
+    });
+    const older = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2026-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+
+    const firstPage = await listLogEvents(connection.db, {
+      guildId: TEST_GUILD_ID,
+      limit: 2
+    });
+
+    // Both tied rows should be returned on the first page, ordered by DESC id
+    assert.equal(firstPage.length, 2);
+    const firstRowId = firstPage[0]!.id;
+    const secondRowId = firstPage[1]!.id;
+    assert.ok(
+      (firstRowId === tiedRowA.id || firstRowId === tiedRowB.id) &&
+        (secondRowId === tiedRowA.id || secondRowId === tiedRowB.id) &&
+        firstRowId !== secondRowId,
+      "First page should contain both tied rows"
+    );
+
+    // Use the first row from the page as cursor
+    const firstPageFirstRow = firstPage[0]!;
+    const secondPage = await listLogEvents(connection.db, {
+      guildId: TEST_GUILD_ID,
+      before: { receivedAt: firstPageFirstRow.receivedAt, id: firstPageFirstRow.id },
+      limit: 10
+    });
+
+    // Should return the other tied row (with id < cursor id) and the older row
+    const secondPageIds = secondPage.map((row) => row.id);
+    assert.ok(
+      secondPageIds.includes(older.id),
+      "Second page should include the older row"
+    );
+    assert.equal(
+      secondPageIds.filter((id) => id === tiedRowA.id || id === tiedRowB.id).length,
+      1,
+      "Second page should include exactly one of the tied rows (the one with smaller id)"
+    );
+    assert.ok(
+      !secondPageIds.includes(firstPageFirstRow.id),
+      "Second page should not include the cursor row itself"
     );
   });
 
