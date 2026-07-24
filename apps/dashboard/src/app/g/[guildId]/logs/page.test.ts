@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { deriveLogsPageState, type LogsQueryResult } from "./page";
+import {
+  deriveLogsPageState,
+  filterRealtimeEntriesByCategory,
+  mergeEntriesById,
+  type LogsQueryResult
+} from "./page";
 
 const ENTRY = {
   id: "log-1",
@@ -66,5 +71,53 @@ describe("deriveLogsPageState", () => {
       hasNextPage: true,
       isFetchingNextPage: false
     });
+  });
+});
+
+describe("mergeEntriesById", () => {
+  test("prepends realtime entries ahead of paginated entries", () => {
+    const realtimeEntry = { ...ENTRY, id: "realtime-1" };
+    const paginatedEntry = { ...ENTRY, id: "log-2" };
+
+    expect(mergeEntriesById([realtimeEntry], [paginatedEntry])).toEqual([
+      realtimeEntry,
+      paginatedEntry
+    ]);
+  });
+
+  test("dedupes by id, keeping the realtime (first-seen) occurrence", () => {
+    const realtimeEntry = { ...ENTRY, id: "log-1", eventName: "realtime-version" };
+    const paginatedEntry = { ...ENTRY, id: "log-1", eventName: "paginated-version" };
+
+    expect(mergeEntriesById([realtimeEntry], [paginatedEntry])).toEqual([realtimeEntry]);
+  });
+
+  test("dedupes duplicate ids within the realtime list itself", () => {
+    const first = { ...ENTRY, id: "dup", eventName: "first" };
+    const second = { ...ENTRY, id: "dup", eventName: "second" };
+
+    expect(mergeEntriesById([first, second], [])).toEqual([first]);
+  });
+});
+
+describe("filterRealtimeEntriesByCategory", () => {
+  const memberEntry = { ...ENTRY, eventName: "member.join" };
+  const messageEntry = { ...ENTRY, id: "log-msg", eventName: "message.delete" };
+
+  test("returns all entries unfiltered when category is 'all'", () => {
+    expect(filterRealtimeEntriesByCategory([memberEntry, messageEntry], "all")).toEqual([
+      memberEntry,
+      messageEntry
+    ]);
+  });
+
+  test("keeps only entries whose eventName maps to the selected category", () => {
+    expect(filterRealtimeEntriesByCategory([memberEntry, messageEntry], "member")).toEqual([
+      memberEntry
+    ]);
+  });
+
+  test("excludes entries whose eventName does not match the selected category", () => {
+    expect(filterRealtimeEntriesByCategory([messageEntry], "member")).toEqual([]);
   });
 });

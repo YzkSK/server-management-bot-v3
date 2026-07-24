@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 
-import { CAP, type LogCategory } from "@sm-bot/shared";
+import { CAP, categoryForEventName, type LogCategory } from "@sm-bot/shared";
 
 import { useCapability } from "../../../../lib/use-capability";
 import { trpc } from "../../../../trpc-client";
@@ -38,6 +38,36 @@ export function deriveLogsPageState(query: LogsQueryResult): LogsPageState {
   return { kind: "loading" };
 }
 
+// 表示中カテゴリタブに合わないrealtimeイベントを除外する。
+// "all"タブでは全カテゴリを表示する。
+export function filterRealtimeEntriesByCategory(
+  entries: LogEntryData[],
+  category: LogCategory
+): LogEntryData[] {
+  if (category === "all") {
+    return entries;
+  }
+  return entries.filter((entry) => categoryForEventName(entry.eventName) === category);
+}
+
+// realtimeエントリとページネーション済みエントリをid基準でdedupeしつつ結合する。
+// realtimeエントリを優先(先勝ち)して残す。
+// 注: 現状はRedis Stream IDとDB行UUIDが別ID空間のため実質dedupeされないが、
+// サーバー側のID整合(別issue)が入れば自動的に効くようになる。
+export function mergeEntriesById(
+  realtimeEntries: LogEntryData[],
+  paginatedEntries: LogEntryData[]
+): LogEntryData[] {
+  const seen = new Set<string>();
+  const result: LogEntryData[] = [];
+  for (const entry of [...realtimeEntries, ...paginatedEntries]) {
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    result.push(entry);
+  }
+  return result;
+}
+
 export default function GuildLogsPage() {
   const { guildId } = useParams<{ guildId: string }>();
   const [category, setCategory] = useState<LogCategory>("all");
@@ -51,9 +81,10 @@ export default function GuildLogsPage() {
   );
 
   const baseState = deriveLogsPageState(query);
+  const filteredRealtimeEntries = filterRealtimeEntriesByCategory(realtime.displayed, category);
   const state: LogsPageState =
     baseState.kind === "loaded"
-      ? { ...baseState, entries: [...realtime.displayed, ...baseState.entries] }
+      ? { ...baseState, entries: mergeEntriesById(filteredRealtimeEntries, baseState.entries) }
       : baseState;
 
   return (

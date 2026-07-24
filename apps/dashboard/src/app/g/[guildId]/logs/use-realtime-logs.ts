@@ -30,6 +30,11 @@ export function useRealtimeLogs(guildId: string) {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
+    setBuffer(createInitialRealtimeLogBufferState());
+    setStatus("idle");
+  }, [guildId]);
+
+  useEffect(() => {
     const socket = io({ path: "/socket.io" });
     socketRef.current = socket;
 

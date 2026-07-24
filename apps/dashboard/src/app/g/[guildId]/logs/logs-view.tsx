@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import { LOG_CATEGORIES, type LogCategory } from "@sm-bot/shared";
 
 import { ScrollArea } from "../../../../components/ui/scroll-area";
@@ -64,6 +66,15 @@ export function LogsPageView({
   onScrollAwayFromTop: () => void;
 }) {
   const effectiveViewMode = canViewRaw ? viewMode : "human";
+  const scrollWrapperRef = useRef<HTMLDivElement>(null);
+
+  function handleResumeAutoScroll() {
+    const viewport = scrollWrapperRef.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]'
+    );
+    if (viewport) viewport.scrollTop = 0;
+    onResumeAutoScroll();
+  }
 
   return (
     <div>
@@ -105,23 +116,27 @@ export function LogsPageView({
       {state.kind === "loaded" ? (
         <>
           {pendingCount > 0 ? (
-            <button type="button" onClick={onResumeAutoScroll}>
+            <button type="button" onClick={handleResumeAutoScroll}>
               {`${pendingCount}件の新着 ↑`}
             </button>
           ) : null}
-          <ScrollArea
-            onScroll={(e) => {
-              if (e.currentTarget.scrollTop > 4) onScrollAwayFromTop();
+          <div
+            ref={scrollWrapperRef}
+            onScrollCapture={(e) => {
+              const scrollTop = (e.target as HTMLElement).scrollTop;
+              if (scrollTop > 4) onScrollAwayFromTop();
             }}
           >
-            <ul>
-              {state.entries.map((entry) => (
-                <li key={entry.id}>
-                  <LogEntryRow entry={entry} viewMode={effectiveViewMode} />
-                </li>
-              ))}
-            </ul>
-          </ScrollArea>
+            <ScrollArea>
+              <ul>
+                {state.entries.map((entry) => (
+                  <li key={entry.id}>
+                    <LogEntryRow entry={entry} viewMode={effectiveViewMode} />
+                  </li>
+                ))}
+              </ul>
+            </ScrollArea>
+          </div>
           {state.hasNextPage ? (
             <button type="button" onClick={onLoadMore} disabled={state.isFetchingNextPage}>
               {state.isFetchingNextPage ? "Loading…" : "Load more"}
