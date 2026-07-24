@@ -2,6 +2,7 @@ import { LOG_CATEGORIES, type LogCategory } from "@sm-bot/shared";
 
 import { ScrollArea } from "../../../../components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
+import type { RealtimeConnectionStatus } from "./realtime-connection-status";
 
 export interface LogEntryData {
   id: string;
@@ -44,7 +45,11 @@ export function LogsPageView({
   canViewRaw,
   viewMode,
   onViewModeChange,
-  onLoadMore
+  onLoadMore,
+  connectionStatus,
+  pendingCount,
+  onResumeAutoScroll,
+  onScrollAwayFromTop
 }: {
   state: LogsPageState;
   category: LogCategory;
@@ -53,6 +58,10 @@ export function LogsPageView({
   viewMode: "human" | "raw";
   onViewModeChange: (mode: "human" | "raw") => void;
   onLoadMore: () => void;
+  connectionStatus: RealtimeConnectionStatus;
+  pendingCount: number;
+  onResumeAutoScroll: () => void;
+  onScrollAwayFromTop: () => void;
 }) {
   const effectiveViewMode = canViewRaw ? viewMode : "human";
 
@@ -67,6 +76,10 @@ export function LogsPageView({
           ))}
         </TabsList>
       </Tabs>
+
+      <span data-status={connectionStatus} aria-label={`Realtime status: ${connectionStatus}`}>
+        ● {connectionStatus}
+      </span>
 
       {canViewRaw ? (
         <div role="group" aria-label="View mode">
@@ -91,7 +104,16 @@ export function LogsPageView({
       {state.kind === "error" ? <p>ログの取得に失敗しました。</p> : null}
       {state.kind === "loaded" ? (
         <>
-          <ScrollArea>
+          {pendingCount > 0 ? (
+            <button type="button" onClick={onResumeAutoScroll}>
+              {`${pendingCount}件の新着 ↑`}
+            </button>
+          ) : null}
+          <ScrollArea
+            onScroll={(e) => {
+              if (e.currentTarget.scrollTop > 4) onScrollAwayFromTop();
+            }}
+          >
             <ul>
               {state.entries.map((entry) => (
                 <li key={entry.id}>

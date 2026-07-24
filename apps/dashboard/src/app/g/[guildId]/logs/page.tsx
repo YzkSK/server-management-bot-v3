@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 
 import { CAP, type LogCategory } from "@sm-bot/shared";
 
 import { useCapability } from "../../../../lib/use-capability";
 import { trpc } from "../../../../trpc-client";
 import { LogsPageView, type LogEntryData, type LogsPageState } from "./logs-view";
+import { useRealtimeLogs } from "./use-realtime-logs";
 
 export interface LogsQueryResult {
   data: { pages: { items: LogEntryData[] }[] } | undefined;
@@ -37,16 +39,22 @@ export function deriveLogsPageState(query: LogsQueryResult): LogsPageState {
 }
 
 export default function GuildLogsPage() {
+  const { guildId } = useParams<{ guildId: string }>();
   const [category, setCategory] = useState<LogCategory>("all");
   const [viewMode, setViewMode] = useState<"human" | "raw">("human");
   const canViewRaw = useCapability(CAP.VIEW_LOGS_RAW);
+  const realtime = useRealtimeLogs(guildId);
 
   const query = trpc.logs.list.useInfiniteQuery(
     { category, limit: 50 },
     { getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined }
   );
 
-  const state = deriveLogsPageState(query);
+  const baseState = deriveLogsPageState(query);
+  const state: LogsPageState =
+    baseState.kind === "loaded"
+      ? { ...baseState, entries: [...realtime.displayed, ...baseState.entries] }
+      : baseState;
 
   return (
     <LogsPageView
@@ -57,6 +65,10 @@ export default function GuildLogsPage() {
       viewMode={viewMode}
       onViewModeChange={setViewMode}
       onLoadMore={() => query.fetchNextPage()}
+      connectionStatus={realtime.status}
+      pendingCount={realtime.pendingCount}
+      onResumeAutoScroll={() => realtime.setPaused(false)}
+      onScrollAwayFromTop={() => realtime.setPaused(true)}
     />
   );
 }

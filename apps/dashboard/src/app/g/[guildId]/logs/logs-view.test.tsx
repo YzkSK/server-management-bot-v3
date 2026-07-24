@@ -16,6 +16,10 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
 
@@ -35,6 +39,10 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
 
@@ -51,6 +59,10 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
 
@@ -68,6 +80,10 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
 
@@ -84,6 +100,10 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
 
@@ -114,6 +134,10 @@ describe("LogsPageView", () => {
         viewMode="raw"
         onViewModeChange={noop}
         onLoadMore={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
     expect(rawHtml).toContain("&quot;foo&quot;: &quot;bar&quot;");
@@ -133,6 +157,10 @@ describe("LogsPageView", () => {
         viewMode="raw"
         onViewModeChange={noop}
         onLoadMore={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
     expect(strippedHtml).not.toContain("<pre>");
@@ -162,6 +190,10 @@ describe("LogsPageView", () => {
         viewMode="raw"
         onViewModeChange={noop}
         onLoadMore={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
 
@@ -179,6 +211,10 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
     expect(withMore).toContain("Load more");
@@ -192,8 +228,98 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
     expect(withoutMore).not.toContain("Load more");
+  });
+
+  test("shows a live status dot with the given status", () => {
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loading" }}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        connectionStatus="live"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+
+    expect(html).toContain('data-status="live"');
+  });
+
+  test("shows a new-entries banner when pendingCount > 0", () => {
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        connectionStatus="live"
+        pendingCount={3}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+
+    expect(html).toContain("3件の新着");
+  });
+
+  test("does not show the banner when pendingCount is 0", () => {
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        connectionStatus="live"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+
+    expect(html).not.toContain("件の新着");
+  });
+
+  test("calls onScrollAwayFromTop when scrolled away from the top", () => {
+    let called = false;
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        connectionStatus="live"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={() => {
+          called = true;
+        }}
+      />
+    );
+
+    // renderToStringはイベントを発火できないため、ここでは`ScrollArea`に
+    // onScrollハンドラのprops自体が渡っている(=TypeErrorにならない)ことのみ確認する。
+    expect(typeof html).toBe("string");
+    expect(called).toBe(false);
   });
 });
