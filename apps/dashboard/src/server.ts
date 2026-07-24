@@ -29,4 +29,7 @@ app.prepare().then(() => {
   httpServer.listen(port, () => {
     console.log(`> dashboard listening on http://localhost:${port} (${dev ? "development" : "production"})`);
   });
+}).catch((error: unknown) => {
+  console.error("dashboard: failed to start server", error);
+  process.exit(1);
 });
