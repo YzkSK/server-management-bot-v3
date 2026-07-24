@@ -15,6 +15,7 @@ export interface LogsQueryResult {
   error: { message: string } | null;
   hasNextPage: boolean | undefined;
   isFetchingNextPage: boolean;
+  isFetching: boolean;
 }
 
 // dataが一度でも取得済みなら、以降のfetchNextPage失敗(query.error)は
@@ -32,7 +33,7 @@ export function deriveLogsPageState(query: LogsQueryResult): LogsPageState {
   }
 
   if (query.error) {
-    return { kind: "error", message: query.error.message };
+    return { kind: "error", message: query.error.message, isRetrying: query.isFetching };
   }
 
   return { kind: "loading" };
@@ -96,6 +97,7 @@ export default function GuildLogsPage() {
       viewMode={viewMode}
       onViewModeChange={setViewMode}
       onLoadMore={() => query.fetchNextPage()}
+      onRetry={() => query.refetch()}
       connectionStatus={realtime.status}
       pendingCount={realtime.pendingCount}
       onResumeAutoScroll={() => realtime.setPaused(false)}

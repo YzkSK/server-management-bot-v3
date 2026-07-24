@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { LOG_CATEGORIES, type LogCategory } from "@sm-bot/shared";
 
@@ -36,7 +36,7 @@ export interface LogEntryData {
 
 export type LogsPageState =
   | { kind: "loading" }
-  | { kind: "error"; message: string }
+  | { kind: "error"; message: string; isRetrying: boolean }
   | {
       kind: "loaded";
       entries: LogEntryData[];
@@ -65,6 +65,7 @@ export function LogsPageView({
   viewMode,
   onViewModeChange,
   onLoadMore,
+  onRetry,
   connectionStatus,
   pendingCount,
   onResumeAutoScroll,
@@ -77,6 +78,7 @@ export function LogsPageView({
   viewMode: "human" | "raw";
   onViewModeChange: (mode: "human" | "raw") => void;
   onLoadMore: () => void;
+  onRetry: () => void;
   connectionStatus: RealtimeConnectionStatus;
   pendingCount: number;
   onResumeAutoScroll: () => void;
@@ -150,7 +152,14 @@ export function LogsPageView({
 
       {state.kind === "loading" ? <p className="text-sm text-muted-foreground">Loading...</p> : null}
       {state.kind === "error" ? (
-        <p className="text-sm text-destructive">ログの取得に失敗しました。</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-destructive">ログの取得に失敗しました。</p>
+          <div>
+            <Button type="button" variant="outline" size="sm" onClick={onRetry} disabled={state.isRetrying}>
+              {state.isRetrying ? "再試行中…" : "再試行"}
+            </Button>
+          </div>
+        </div>
       ) : null}
       {state.kind === "loaded" ? (
         <>
@@ -208,7 +217,7 @@ function LogEntryRow({
   return (
     <div className="flex flex-col gap-1 text-sm">
       <div className="flex items-baseline gap-2 text-xs text-muted-foreground">
-        <span>{entry.receivedAt}</span>
+        <ReceivedAtLabel receivedAt={entry.receivedAt} />
         <span className="font-mono">{entry.eventName}</span>
       </div>
       {viewMode === "raw" && entry.payload !== null ? (
@@ -219,6 +228,20 @@ function LogEntryRow({
         <HumanSummary entry={entry} />
       )}
     </div>
+  );
+}
+
+// サーバー/クライアントでロケール・タイムゾーンが異なるとtoLocaleString()の
+// 結果が食い違いhydration mismatchが起きるため、マウント後にのみローカライズ表示へ切り替える。
+function ReceivedAtLabel({ receivedAt }: { receivedAt: string }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return (
+    <time dateTime={receivedAt}>{mounted ? new Date(receivedAt).toLocaleString() : receivedAt}</time>
   );
 }
 
