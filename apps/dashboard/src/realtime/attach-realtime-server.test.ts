@@ -168,6 +168,28 @@ describe("createRealtimeLogsConnectionHandler", () => {
     expect(pollCount).toBe(countAfterUnsubscribe);
   });
 
+  test("does not throw and emits REALTIME_LOGS_ERROR when subscribe payload has no guildId", async () => {
+    const socket = new FakeSocket();
+    const pollCalls: string[] = [];
+    const handler = createRealtimeLogsConnectionHandler(
+      deps({
+        poll: async (guildId) => {
+          pollCalls.push(guildId);
+          return { messages: [], nextId: "$" };
+        }
+      })
+    );
+
+    handler(socket as never);
+
+    expect(() => socket.emit(REALTIME_LOGS_SUBSCRIBE, undefined)).not.toThrow();
+    expect(() => socket.emit(REALTIME_LOGS_SUBSCRIBE, {})).not.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(socket.emitted).toContainEqual({ event: REALTIME_LOGS_ERROR, payload: { reason: "forbidden" } });
+    expect(pollCalls).toEqual([]);
+  });
+
   test("resumes polling after unsubscribe then re-subscribe (does not permanently disable the socket)", async () => {
     const socket = new FakeSocket();
     let pollCount = 0;

@@ -51,7 +51,22 @@ export function createRealtimeLogsConnectionHandler(deps: ConnectionHandlerDeps)
       stopCurrentSubscription();
     }
 
-    socket.on(REALTIME_LOGS_SUBSCRIBE, ({ guildId }: { guildId: string }) => {
+    socket.on(REALTIME_LOGS_SUBSCRIBE, (payload: unknown) => {
+      if (
+        typeof payload !== "object" ||
+        payload === null ||
+        typeof (payload as { guildId?: unknown }).guildId !== "string" ||
+        (payload as { guildId: string }).guildId.length === 0
+      ) {
+        // 不正なpayload(未指定・非オブジェクト・空guildId)は購読を開始せず、
+        // 破棄しつつクライアントにforbiddenを通知する。ここでdestructureして
+        // 例外を投げるとsocket.io内部のイベントディスパッチ(process.nextTick内)で
+        // 未捕捉例外となり、プロセス全体をクラッシュさせ得るため必ずガードする。
+        socket.emit(REALTIME_LOGS_ERROR, { reason: "forbidden" });
+        return;
+      }
+      const { guildId } = payload as { guildId: string };
+
       stopCurrentSubscription();
 
       let cancelled = false;
