@@ -154,6 +154,7 @@ export function createRealtimeLogsConnectionHandler(deps: ConnectionHandlerDeps)
 export interface DuplicableXReadClient extends XReadClient {
   duplicate: () => DuplicableXReadClient;
   connect: () => Promise<unknown>;
+  on: (event: "error", listener: (error: unknown) => void) => unknown;
 }
 
 export interface RealtimeServerDeps {
@@ -170,15 +171,32 @@ export function attachRealtimeServer(httpServer: HttpServer, deps: RealtimeServe
 
   // pollのXREAD BLOCKは認可キャッシュ用の共有Redis接続を専有すると
   // 並行閲覧時にダッシュボード全体のRedis利用を遅延させるため、
-  // 複製した接続を1本だけ確立し全購読のpollで使い回す。
-  let pollClientPromise: Promise<XReadClient> | null = null;
-  function getPollRedisClient(): Promise<XReadClient> {
-    pollClientPromise ??= (async () => {
-      const isolated = (await deps.getRedisClient()).duplicate();
-      await isolated.connect();
-      return isolated;
-    })();
-    return pollClientPromise;
+  // guildごとに複製した専用接続で実行する(guild単位の共有は許容: 同一guildへの
+  // 複数閲覧は元々1本のポーリングに集約する設計上の既知の制約で、別issueでの
+  // fan-out化対象。異なるguild間でXREAD BLOCKが直列化される問題のみをここで解消する)。
+  const pollClientsByGuild = new Map<string, Promise<XReadClient>>();
+  function getPollRedisClient(guildId: string): Promise<XReadClient> {
+    let clientPromise = pollClientsByGuild.get(guildId);
+    if (!clientPromise) {
+      clientPromise = (async () => {
+        const isolated = (await deps.getRedisClient()).duplicate();
+        // duplicate()は複製元に設定済みのerrorリスナーを引き継がないため、
+        // ここで付けないとRedis障害時にプロセス全体を落としかねない。
+        isolated.on("error", (error) => {
+          console.error("[realtime-logs] poll redis client error", { guildId, error });
+        });
+        await isolated.connect();
+        return isolated;
+      })();
+      clientPromise.catch(() => {
+        // 接続確立に失敗したPromiseを永続キャッシュしない。次回subscribeで再接続を試みる。
+        if (pollClientsByGuild.get(guildId) === clientPromise) {
+          pollClientsByGuild.delete(guildId);
+        }
+      });
+      pollClientsByGuild.set(guildId, clientPromise);
+    }
+    return clientPromise;
   }
 
   const handler = createRealtimeLogsConnectionHandler({
@@ -193,7 +211,7 @@ export function attachRealtimeServer(httpServer: HttpServer, deps: RealtimeServe
         cache: await deps.getCacheClient()
       }),
     poll: async (guildId, lastId) =>
-      pollRealtimeLogStreamDefault(await getPollRedisClient(), guildId, lastId)
+      pollRealtimeLogStreamDefault(await getPollRedisClient(guildId), guildId, lastId)
   });
 
   io.on("connection", handler);

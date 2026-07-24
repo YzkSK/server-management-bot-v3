@@ -13,7 +13,6 @@ import {
   type RealtimeLogEventPayload
 } from "@sm-bot/shared";
 
-import { filterRealtimeEntriesByCategory } from "./filter-realtime-entries-by-category";
 import type { LogEntryData } from "./logs-view";
 import { nextConnectionStatus, type RealtimeConnectionStatus } from "./realtime-connection-status";
 import {
@@ -78,7 +77,7 @@ export function useRealtimeLogs(guildId: string, category: LogCategory) {
   return {
     status,
     displayed: buffer.displayed,
-    pendingCount: filterRealtimeEntriesByCategory(buffer.pending, category).length,
+    pendingCount: buffer.pendingCountByCategory[category],
     setPaused
   };
 }
