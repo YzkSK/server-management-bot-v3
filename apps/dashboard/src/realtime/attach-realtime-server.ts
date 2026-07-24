@@ -14,11 +14,11 @@ import { Server as SocketIOServer, type Socket } from "socket.io";
 
 import {
   authenticateRealtimeSubscription as authenticateRealtimeSubscriptionDefault
-} from "./authenticate-realtime-subscription";
+} from "./authenticate-realtime-subscription.ts";
 import {
   pollRealtimeLogStream as pollRealtimeLogStreamDefault,
   type XReadClient
-} from "./poll-realtime-log-stream";
+} from "./poll-realtime-log-stream.ts";
 
 const DEFAULT_POLL_INTERVAL_MS = 250;
 

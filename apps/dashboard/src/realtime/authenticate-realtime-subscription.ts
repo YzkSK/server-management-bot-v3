@@ -7,8 +7,8 @@ import type { RealtimeLogsErrorReason } from "@sm-bot/shared";
 
 import {
   resolveDashboardAccessForRequest as resolveDashboardAccessForRequestDefault
-} from "../server/resolve-dashboard-access";
-import { parseCookieHeader } from "./parse-cookie-header";
+} from "../server/resolve-dashboard-access.ts";
+import { parseCookieHeader } from "./parse-cookie-header.ts";
 
 export interface AuthenticateRealtimeSubscriptionInput {
   headers: Record<string, string | string[] | undefined>;

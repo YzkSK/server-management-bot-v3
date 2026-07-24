@@ -3,8 +3,8 @@ import { createServer } from "node:http";
 import { parseDashboardAuthEnv } from "@sm-bot/config";
 import next from "next";
 
-import { attachRealtimeServer } from "./realtime/attach-realtime-server";
-import { getDashboardDb, getDashboardRedisClient } from "./server/trpc-context";
+import { attachRealtimeServer } from "./realtime/attach-realtime-server.ts";
+import { getDashboardDb, getDashboardRedisClient } from "./server/trpc-context.ts";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
