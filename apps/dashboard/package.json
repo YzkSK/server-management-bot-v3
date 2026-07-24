@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "next build",
-    "dev": "next dev",
+    "dev": "bun --watch src/server.ts",
     "lint": "next typegen && tsc -p tsconfig.json --noEmit",
-    "start": "next start",
+    "start": "NODE_ENV=production bun src/server.ts",
     "test": "bun test src",
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit"
   },
