@@ -125,6 +125,18 @@ describe("realtime-log-buffer", () => {
     expect(withDuplicate.pendingCountByCategory.member).toBe(1);
   });
 
+  test("does not double-count when a single incoming batch itself contains a duplicate id", () => {
+    const paused = setRealtimeLogsPaused(createInitialRealtimeLogBufferState(), true);
+
+    const next = applyIncomingRealtimeLogs(paused, [
+      entry("1", "member.join"),
+      entry("1", "member.join")
+    ]);
+
+    expect(next.pendingCountByCategory.all).toBe(1);
+    expect(next.pendingCountByCategory.member).toBe(1);
+  });
+
   test("resuming (paused -> false) flushes pending into displayed, clears pending, and resets counts", () => {
     const paused = setRealtimeLogsPaused(createInitialRealtimeLogBufferState(), true);
     const withPending = applyIncomingRealtimeLogs(paused, [entry("2"), entry("1")]);

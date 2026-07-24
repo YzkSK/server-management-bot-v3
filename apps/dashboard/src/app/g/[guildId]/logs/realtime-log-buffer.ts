@@ -67,8 +67,10 @@ export function applyIncomingRealtimeLogs(
   if (state.paused) {
     // 新着件数バナー(pendingCount)はカテゴリ別カウンタで別管理し、pending配列自体は
     // displayedと同じくMAX_BUFFERで切り詰める(無制限保持によるメモリ増加を防ぐ)。
+    // incoming自体に重複IDが含まれる場合も二重加算しないよう、先にincoming内で
+    // dedupeしてからexistingIdsとの突き合わせを行う。
     const existingIds = new Set(state.pending.map((entry) => entry.id));
-    const newEntries = incoming.filter((entry) => !existingIds.has(entry.id));
+    const newEntries = dedupeById(incoming).filter((entry) => !existingIds.has(entry.id));
     return {
       ...state,
       pending: dedupeById([...incoming, ...state.pending]).slice(0, MAX_BUFFER),
