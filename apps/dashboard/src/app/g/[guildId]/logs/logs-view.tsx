@@ -1,7 +1,8 @@
+import { useEffect, useState } from "react";
+
 import { LOG_CATEGORIES, type LogCategory } from "@sm-bot/shared";
 
 import { ScrollArea } from "../../../../components/ui/scroll-area";
-import { Tabs, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
 
 export interface LogEntryData {
   id: string;
@@ -16,7 +17,7 @@ export interface LogEntryData {
 
 export type LogsPageState =
   | { kind: "loading" }
-  | { kind: "error"; message: string }
+  | { kind: "error"; message: string; isRetrying: boolean }
   | {
       kind: "loaded";
       entries: LogEntryData[];
@@ -44,7 +45,8 @@ export function LogsPageView({
   canViewRaw,
   viewMode,
   onViewModeChange,
-  onLoadMore
+  onLoadMore,
+  onRetry
 }: {
   state: LogsPageState;
   category: LogCategory;
@@ -53,20 +55,24 @@ export function LogsPageView({
   viewMode: "human" | "raw";
   onViewModeChange: (mode: "human" | "raw") => void;
   onLoadMore: () => void;
+  onRetry: () => void;
 }) {
   const effectiveViewMode = canViewRaw ? viewMode : "human";
 
   return (
     <div>
-      <Tabs value={category} onValueChange={(next) => onCategoryChange(next as LogCategory)}>
-        <TabsList>
-          {LOG_CATEGORIES.map((c) => (
-            <TabsTrigger key={c} value={c}>
-              {CATEGORY_LABELS[c]}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <div role="group" aria-label="Log category">
+        {LOG_CATEGORIES.map((c) => (
+          <button
+            key={c}
+            type="button"
+            aria-pressed={category === c}
+            onClick={() => onCategoryChange(c)}
+          >
+            {CATEGORY_LABELS[c]}
+          </button>
+        ))}
+      </div>
 
       {canViewRaw ? (
         <div role="group" aria-label="View mode">
@@ -88,7 +94,14 @@ export function LogsPageView({
       ) : null}
 
       {state.kind === "loading" ? <p>Loading...</p> : null}
-      {state.kind === "error" ? <p>ログの取得に失敗しました。</p> : null}
+      {state.kind === "error" ? (
+        <div>
+          <p>ログの取得に失敗しました。</p>
+          <button type="button" onClick={onRetry} disabled={state.isRetrying}>
+            {state.isRetrying ? "再試行中…" : "再試行"}
+          </button>
+        </div>
+      ) : null}
       {state.kind === "loaded" ? (
         <>
           <ScrollArea>
@@ -120,7 +133,7 @@ function LogEntryRow({
 }) {
   return (
     <div>
-      <span>{entry.receivedAt}</span>{" "}
+      <ReceivedAtLabel receivedAt={entry.receivedAt} />{" "}
       <span>{entry.eventName}</span>
       {viewMode === "raw" && entry.payload !== null ? (
         <pre>{JSON.stringify(entry.payload, null, 2)}</pre>
@@ -128,6 +141,20 @@ function LogEntryRow({
         <HumanSummary entry={entry} />
       )}
     </div>
+  );
+}
+
+// サーバー/クライアントでロケール・タイムゾーンが異なるとtoLocaleString()の
+// 結果が食い違いhydration mismatchが起きるため、マウント後にのみローカライズ表示へ切り替える。
+function ReceivedAtLabel({ receivedAt }: { receivedAt: string }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return (
+    <time dateTime={receivedAt}>{mounted ? new Date(receivedAt).toLocaleString() : receivedAt}</time>
   );
 }
 

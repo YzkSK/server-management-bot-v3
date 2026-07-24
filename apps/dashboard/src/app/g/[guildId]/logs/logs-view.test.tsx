@@ -6,7 +6,7 @@ import { LogsPageView, type LogEntryData, type LogsPageState } from "./logs-view
 function noop() {}
 
 describe("LogsPageView", () => {
-  test("renders a tab per log category", () => {
+  test("renders a button per log category", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loading" }}
@@ -16,6 +16,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
       />
     );
 
@@ -23,6 +24,28 @@ describe("LogsPageView", () => {
     expect(html).toContain("Message");
     expect(html).toContain("Temp VC");
     expect(html).toContain("Dashboard");
+    expect(html).not.toContain('role="tab"');
+    expect(html).not.toContain('role="tablist"');
+  });
+
+  test("marks the active category button with aria-pressed", () => {
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loading" }}
+        category="member"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+      />
+    );
+
+    const memberButtonIndex = html.indexOf(">Member<");
+    const memberButtonStart = html.lastIndexOf("<button", memberButtonIndex);
+    const memberButtonTag = html.slice(memberButtonStart, memberButtonIndex);
+    expect(memberButtonTag).toContain('aria-pressed="true"');
   });
 
   test("shows Loading... while loading", () => {
@@ -35,6 +58,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
       />
     );
 
@@ -44,18 +68,55 @@ describe("LogsPageView", () => {
   test("shows a generic error message without leaking the raw error", () => {
     const html = renderToString(
       <LogsPageView
-        state={{ kind: "error", message: "boom" }}
+        state={{ kind: "error", message: "boom", isRetrying: false }}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
       />
     );
 
     expect(html).toContain("ログの取得に失敗しました。");
     expect(html).not.toContain("boom");
+  });
+
+  test("shows a retry button on error that is enabled and calls onRetry", () => {
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "error", message: "boom", isRetrying: false }}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+      />
+    );
+
+    expect(html).toContain("再試行");
+    expect(html).not.toContain('disabled=""');
+  });
+
+  test("disables the retry button and shows a retrying label while a retry is in flight", () => {
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "error", message: "boom", isRetrying: true }}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+      />
+    );
+
+    expect(html).toContain("再試行中…");
+    expect(html).toContain('disabled=""');
   });
 
   test("hides the Human View/Raw JSON toggle when canViewRaw is false", () => {
@@ -68,6 +129,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
       />
     );
 
@@ -84,6 +146,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
       />
     );
 
@@ -114,6 +177,7 @@ describe("LogsPageView", () => {
         viewMode="raw"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
       />
     );
     expect(rawHtml).toContain("&quot;foo&quot;: &quot;bar&quot;");
@@ -133,6 +197,7 @@ describe("LogsPageView", () => {
         viewMode="raw"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
       />
     );
     expect(strippedHtml).not.toContain("<pre>");
@@ -162,6 +227,7 @@ describe("LogsPageView", () => {
         viewMode="raw"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
       />
     );
 
@@ -179,6 +245,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
       />
     );
     expect(withMore).toContain("Load more");
@@ -192,6 +259,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
       />
     );
     expect(withoutMore).not.toContain("Load more");

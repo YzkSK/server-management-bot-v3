@@ -19,7 +19,8 @@ describe("deriveLogsPageState", () => {
       data: undefined,
       error: null,
       hasNextPage: false,
-      isFetchingNextPage: false
+      isFetchingNextPage: false,
+      isFetching: false
     };
 
     expect(deriveLogsPageState(query)).toEqual({ kind: "loading" });
@@ -30,10 +31,31 @@ describe("deriveLogsPageState", () => {
       data: undefined,
       error: { message: "boom" },
       hasNextPage: false,
-      isFetchingNextPage: false
+      isFetchingNextPage: false,
+      isFetching: false
     };
 
-    expect(deriveLogsPageState(query)).toEqual({ kind: "error", message: "boom" });
+    expect(deriveLogsPageState(query)).toEqual({
+      kind: "error",
+      message: "boom",
+      isRetrying: false
+    });
+  });
+
+  test("marks the error state as retrying while a refetch is in flight", () => {
+    const query: LogsQueryResult = {
+      data: undefined,
+      error: { message: "boom" },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isFetching: true
+    };
+
+    expect(deriveLogsPageState(query)).toEqual({
+      kind: "error",
+      message: "boom",
+      isRetrying: true
+    });
   });
 
   test("returns loaded with entries from all pages once data has arrived", () => {
@@ -41,7 +63,8 @@ describe("deriveLogsPageState", () => {
       data: { pages: [{ items: [ENTRY] }, { items: [{ ...ENTRY, id: "log-2" }] }] },
       error: null,
       hasNextPage: true,
-      isFetchingNextPage: false
+      isFetchingNextPage: false,
+      isFetching: false
     };
 
     expect(deriveLogsPageState(query)).toEqual({
@@ -57,7 +80,8 @@ describe("deriveLogsPageState", () => {
       data: { pages: [{ items: [ENTRY] }] },
       error: { message: "network error on fetchNextPage" },
       hasNextPage: true,
-      isFetchingNextPage: false
+      isFetchingNextPage: false,
+      isFetching: false
     };
 
     expect(deriveLogsPageState(query)).toEqual({
