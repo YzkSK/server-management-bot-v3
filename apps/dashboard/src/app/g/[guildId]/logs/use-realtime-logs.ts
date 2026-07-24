@@ -7,6 +7,7 @@ import {
   REALTIME_LOGS_ERROR,
   REALTIME_LOGS_EVENT,
   REALTIME_LOGS_SUBSCRIBE,
+  REALTIME_LOGS_SUBSCRIBED,
   REALTIME_LOGS_UNSUBSCRIBE,
   type RealtimeLogEventPayload
 } from "@sm-bot/shared";
@@ -42,6 +43,9 @@ export function useRealtimeLogs(guildId: string) {
     socket.on("connect", () => {
       setStatus((s) => nextConnectionStatus(s, "connect"));
       socket.emit(REALTIME_LOGS_SUBSCRIBE, { guildId });
+    });
+    socket.on(REALTIME_LOGS_SUBSCRIBED, () => {
+      setStatus((s) => nextConnectionStatus(s, "subscribed"));
     });
     socket.on(REALTIME_LOGS_EVENT, (payload: RealtimeLogEventPayload) => {
       setStatus((s) => nextConnectionStatus(s, "subscribed"));

@@ -6,6 +6,7 @@ import {
   REALTIME_LOGS_ERROR,
   REALTIME_LOGS_EVENT,
   REALTIME_LOGS_SUBSCRIBE,
+  REALTIME_LOGS_SUBSCRIBED,
   REALTIME_LOGS_UNSUBSCRIBE,
   type RealtimeLogEventPayload
 } from "@sm-bot/shared";
@@ -94,6 +95,11 @@ export function createRealtimeLogsConnectionHandler(deps: ConnectionHandlerDeps)
             socket.emit(REALTIME_LOGS_ERROR, { reason: result.reason });
             return;
           }
+
+          // 認証・認可に成功した時点でackを送る。ログ活動が無いguildでも
+          // クライアントが「connecting」のまま止まらないようにするため
+          // (実ログイベントの到着を待たずにlive状態へ遷移できる)。
+          socket.emit(REALTIME_LOGS_SUBSCRIBED);
 
           let lastId = "$";
           while (active()) {

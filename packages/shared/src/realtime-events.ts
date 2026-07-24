@@ -7,6 +7,10 @@ export const REALTIME_LOGS_UNSUBSCRIBE = "realtimeLogsUnsubscribe";
 // Server -> Client: 新規ログイベント1件。payload: RealtimeLogEventPayload
 export const REALTIME_LOGS_EVENT = "realtimeLogsEvent";
 
+// Server -> Client: subscribe要求の認証・認可に成功した直後、ポーリング開始前に1回だけ送る。
+// payloadなし。ログが無いguildでも「connecting」状態から復帰できるようにするためのack。
+export const REALTIME_LOGS_SUBSCRIBED = "realtimeLogsSubscribed";
+
 // Server -> Client: subscribe要求が拒否された。payload: { reason: RealtimeLogsErrorReason }
 export const REALTIME_LOGS_ERROR = "realtimeLogsError";
 
