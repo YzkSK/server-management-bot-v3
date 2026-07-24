@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import {
   deriveLogsPageState,
-  filterRealtimeEntriesByCategory,
   mergeEntriesById,
   type LogsQueryResult
 } from "./page";
@@ -121,27 +120,5 @@ describe("mergeEntriesById", () => {
     const second = { ...ENTRY, id: "dup", eventName: "second" };
 
     expect(mergeEntriesById([first, second], [])).toEqual([first]);
-  });
-});
-
-describe("filterRealtimeEntriesByCategory", () => {
-  const memberEntry = { ...ENTRY, eventName: "member.join" };
-  const messageEntry = { ...ENTRY, id: "log-msg", eventName: "message.delete" };
-
-  test("returns all entries unfiltered when category is 'all'", () => {
-    expect(filterRealtimeEntriesByCategory([memberEntry, messageEntry], "all")).toEqual([
-      memberEntry,
-      messageEntry
-    ]);
-  });
-
-  test("keeps only entries whose eventName maps to the selected category", () => {
-    expect(filterRealtimeEntriesByCategory([memberEntry, messageEntry], "member")).toEqual([
-      memberEntry
-    ]);
-  });
-
-  test("excludes entries whose eventName does not match the selected category", () => {
-    expect(filterRealtimeEntriesByCategory([messageEntry], "member")).toEqual([]);
   });
 });

@@ -32,9 +32,11 @@ export function applyIncomingRealtimeLogs(
   }
 
   if (state.paused) {
+    // pendingは新着件数バナー(pendingCount)の集計元も兼ねるため、
+    // 表示用のdisplayedと違いMAX_BUFFERで切り詰めない。
     return {
       ...state,
-      pending: dedupeById([...incoming, ...state.pending]).slice(0, MAX_BUFFER)
+      pending: dedupeById([...incoming, ...state.pending])
     };
   }
 

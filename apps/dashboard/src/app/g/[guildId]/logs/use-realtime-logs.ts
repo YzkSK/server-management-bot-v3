@@ -9,9 +9,11 @@ import {
   REALTIME_LOGS_SUBSCRIBE,
   REALTIME_LOGS_SUBSCRIBED,
   REALTIME_LOGS_UNSUBSCRIBE,
+  type LogCategory,
   type RealtimeLogEventPayload
 } from "@sm-bot/shared";
 
+import { filterRealtimeEntriesByCategory } from "./filter-realtime-entries-by-category";
 import type { LogEntryData } from "./logs-view";
 import { nextConnectionStatus, type RealtimeConnectionStatus } from "./realtime-connection-status";
 import {
@@ -25,7 +27,7 @@ function toLogEntryData(payload: RealtimeLogEventPayload): LogEntryData {
   return payload;
 }
 
-export function useRealtimeLogs(guildId: string) {
+export function useRealtimeLogs(guildId: string, category: LogCategory) {
   const [status, setStatus] = useState<RealtimeConnectionStatus>("idle");
   const [buffer, setBuffer] = useState<RealtimeLogBufferState>(createInitialRealtimeLogBufferState);
   const socketRef = useRef<Socket | null>(null);
@@ -76,7 +78,7 @@ export function useRealtimeLogs(guildId: string) {
   return {
     status,
     displayed: buffer.displayed,
-    pendingCount: buffer.pending.length,
+    pendingCount: filterRealtimeEntriesByCategory(buffer.pending, category).length,
     setPaused
   };
 }

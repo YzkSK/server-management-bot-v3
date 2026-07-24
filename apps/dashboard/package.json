@@ -3,10 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.6.0"
+  },
   "scripts": {
     "build": "next build",
+    "predev": "bun run --filter '@sm-bot/config' --filter '@sm-bot/dashboard-access' --filter '@sm-bot/db' --filter '@sm-bot/logging' --filter '@sm-bot/shared' build",
     "dev": "node --experimental-strip-types src/server.ts",
     "lint": "next typegen && tsc -p tsconfig.json --noEmit",
+    "prestart": "bun run --filter '@sm-bot/config' --filter '@sm-bot/dashboard-access' --filter '@sm-bot/db' --filter '@sm-bot/logging' --filter '@sm-bot/shared' build",
     "start": "NODE_ENV=production node --experimental-strip-types src/server.ts",
     "test": "bun test src",
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit"

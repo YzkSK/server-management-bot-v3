@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 
-import { CAP, categoryForEventName, type LogCategory } from "@sm-bot/shared";
+import { CAP, type LogCategory } from "@sm-bot/shared";
 
 import { useCapability } from "../../../../lib/use-capability";
 import { trpc } from "../../../../trpc-client";
+import { filterRealtimeEntriesByCategory } from "./filter-realtime-entries-by-category";
 import { LogsPageView, type LogEntryData, type LogsPageState } from "./logs-view";
 import { useRealtimeLogs } from "./use-realtime-logs";
 
@@ -39,18 +40,6 @@ export function deriveLogsPageState(query: LogsQueryResult): LogsPageState {
   return { kind: "loading" };
 }
 
-// 表示中カテゴリタブに合わないrealtimeイベントを除外する。
-// "all"タブでは全カテゴリを表示する。
-export function filterRealtimeEntriesByCategory(
-  entries: LogEntryData[],
-  category: LogCategory
-): LogEntryData[] {
-  if (category === "all") {
-    return entries;
-  }
-  return entries.filter((entry) => categoryForEventName(entry.eventName) === category);
-}
-
 // realtimeエントリとページネーション済みエントリをid基準でdedupeしつつ結合する。
 // realtimeエントリを優先(先勝ち)して残す。
 // 注: 現状はRedis Stream IDとDB行UUIDが別ID空間のため実質dedupeされないが、
@@ -74,7 +63,7 @@ export default function GuildLogsPage() {
   const [category, setCategory] = useState<LogCategory>("all");
   const [viewMode, setViewMode] = useState<"human" | "raw">("human");
   const canViewRaw = useCapability(CAP.VIEW_LOGS_RAW);
-  const realtime = useRealtimeLogs(guildId);
+  const realtime = useRealtimeLogs(guildId, category);
 
   const query = trpc.logs.list.useInfiniteQuery(
     { category, limit: 50 },

@@ -8,7 +8,8 @@ import {
   REALTIME_LOGS_SUBSCRIBE,
   REALTIME_LOGS_SUBSCRIBED,
   REALTIME_LOGS_UNSUBSCRIBE,
-  type RealtimeLogEventPayload
+  type RealtimeLogEventPayload,
+  type RealtimeLogsErrorReason
 } from "@sm-bot/shared";
 import { Server as SocketIOServer, type Socket } from "socket.io";
 
@@ -24,7 +25,7 @@ const DEFAULT_POLL_INTERVAL_MS = 250;
 
 export interface ConnectionHandlerDeps {
   authenticate: (guildId: string, headers: Record<string, string | string[] | undefined>) => Promise<
-    { ok: true; userId: string; canViewRaw: boolean } | { ok: false; reason: "unauthenticated" | "forbidden" }
+    { ok: true; userId: string; canViewRaw: boolean } | { ok: false; reason: RealtimeLogsErrorReason }
   >;
   poll: (
     guildId: string,
@@ -134,6 +135,9 @@ export function createRealtimeLogsConnectionHandler(deps: ConnectionHandlerDeps)
           // auth/poll例外を握り潰さず記録する。未処理rejectionを防ぎつつ、
           // 既にcancel/disconnect済みの購読へは通知しない。
           console.error("[realtime-logs] subscription failed", { guildId, error });
+          if (active()) {
+            socket.emit(REALTIME_LOGS_ERROR, { reason: "internal" });
+          }
         } finally {
           if (cancelCurrentSubscription === cancel) {
             cancelCurrentSubscription = null;
@@ -147,17 +151,35 @@ export function createRealtimeLogsConnectionHandler(deps: ConnectionHandlerDeps)
   };
 }
 
+export interface DuplicableXReadClient extends XReadClient {
+  duplicate: () => DuplicableXReadClient;
+  connect: () => Promise<unknown>;
+}
+
 export interface RealtimeServerDeps {
   nextAuthSecret: string;
   botToken: string;
   getDb: () => DbClient;
-  getRedisClient: () => Promise<XReadClient>;
+  getRedisClient: () => Promise<DuplicableXReadClient>;
   getCacheClient: () => Promise<DashboardAccessCacheClient>;
   pollIntervalMs?: number;
 }
 
 export function attachRealtimeServer(httpServer: HttpServer, deps: RealtimeServerDeps): SocketIOServer {
   const io = new SocketIOServer(httpServer, { path: "/socket.io" });
+
+  // pollのXREAD BLOCKは認可キャッシュ用の共有Redis接続を専有すると
+  // 並行閲覧時にダッシュボード全体のRedis利用を遅延させるため、
+  // 複製した接続を1本だけ確立し全購読のpollで使い回す。
+  let pollClientPromise: Promise<XReadClient> | null = null;
+  function getPollRedisClient(): Promise<XReadClient> {
+    pollClientPromise ??= (async () => {
+      const isolated = (await deps.getRedisClient()).duplicate();
+      await isolated.connect();
+      return isolated;
+    })();
+    return pollClientPromise;
+  }
 
   const handler = createRealtimeLogsConnectionHandler({
     pollIntervalMs: deps.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
@@ -171,7 +193,7 @@ export function attachRealtimeServer(httpServer: HttpServer, deps: RealtimeServe
         cache: await deps.getCacheClient()
       }),
     poll: async (guildId, lastId) =>
-      pollRealtimeLogStreamDefault(await deps.getRedisClient(), guildId, lastId)
+      pollRealtimeLogStreamDefault(await getPollRedisClient(), guildId, lastId)
   });
 
   io.on("connection", handler);

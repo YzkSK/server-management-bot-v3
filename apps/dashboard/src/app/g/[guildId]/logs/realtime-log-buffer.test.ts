@@ -64,6 +64,18 @@ describe("realtime-log-buffer", () => {
     expect(next.displayed[0]).toEqual(entry("new-1"));
   });
 
+  test("does not cap pending, so the new-entries count stays accurate past 200 while paused", () => {
+    const many = Array.from({ length: 200 }, (_, i) => entry(`old-${i}`));
+    const state = setRealtimeLogsPaused(
+      { displayed: [], pending: many, paused: false },
+      true
+    );
+
+    const next = applyIncomingRealtimeLogs(state, [entry("new-1")]);
+
+    expect(next.pending.length).toBe(201);
+  });
+
   test("resuming (paused -> false) flushes pending into displayed and clears pending", () => {
     const paused = setRealtimeLogsPaused(createInitialRealtimeLogBufferState(), true);
     const withPending = applyIncomingRealtimeLogs(paused, [entry("2"), entry("1")]);

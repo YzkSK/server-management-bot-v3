@@ -16,7 +16,8 @@ export const REALTIME_LOGS_ERROR = "realtimeLogsError";
 
 export const REALTIME_LOGS_ERROR_REASONS = [
   "unauthenticated",
-  "forbidden"
+  "forbidden",
+  "internal"
 ] as const;
 
 export type RealtimeLogsErrorReason = (typeof REALTIME_LOGS_ERROR_REASONS)[number];

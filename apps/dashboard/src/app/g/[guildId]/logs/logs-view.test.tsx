@@ -110,6 +110,10 @@ describe("LogsPageView", () => {
         onViewModeChange={noop}
         onLoadMore={noop}
         onRetry={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
 
@@ -128,6 +132,10 @@ describe("LogsPageView", () => {
         onViewModeChange={noop}
         onLoadMore={noop}
         onRetry={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
       />
     );
 
@@ -319,6 +327,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
         connectionStatus="live"
         pendingCount={0}
         onResumeAutoScroll={noop}
@@ -339,6 +348,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
         connectionStatus="live"
         pendingCount={3}
         onResumeAutoScroll={noop}
@@ -359,6 +369,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
         connectionStatus="live"
         pendingCount={0}
         onResumeAutoScroll={noop}
@@ -369,7 +380,7 @@ describe("LogsPageView", () => {
     expect(html).not.toContain("件の新着");
   });
 
-  test("calls onScrollAwayFromTop when scrolled away from the top", () => {
+  test("wires onScrollAwayFromTop as a prop without rendering it directly (props wiring only)", () => {
     let called = false;
     const html = renderToString(
       <LogsPageView
@@ -380,6 +391,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
         connectionStatus="live"
         pendingCount={0}
         onResumeAutoScroll={noop}
@@ -410,6 +422,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
         connectionStatus="live"
         pendingCount={0}
         onResumeAutoScroll={noop}
@@ -420,7 +433,7 @@ describe("LogsPageView", () => {
     expect(html).toContain('data-slot="scroll-area-viewport"');
   });
 
-  test("clicking the new-entries banner does not throw (resume handler wiring)", () => {
+  test("renders the new-entries banner without invoking onResumeAutoScroll (props wiring only)", () => {
     // renderToStringではDOM refやclickイベントを検証できないため、ここではbanner
     // ボタンがonResumeAutoScrollではなく内部のhandleResumeAutoScroll(scrollTop=0への
     // リセット処理を含む)に配線されていても、レンダリング自体が壊れないことのみ確認する。
@@ -435,6 +448,7 @@ describe("LogsPageView", () => {
         viewMode="human"
         onViewModeChange={noop}
         onLoadMore={noop}
+        onRetry={noop}
         connectionStatus="live"
         pendingCount={2}
         onResumeAutoScroll={() => {
