@@ -42,8 +42,9 @@ export function deriveLogsPageState(query: LogsQueryResult): LogsPageState {
 
 // realtimeエントリとページネーション済みエントリをid基準でdedupeしつつ結合する。
 // realtimeエントリを優先(先勝ち)して残す。
-// 注: 現状はRedis Stream IDとDB行UUIDが別ID空間のため実質dedupeされないが、
-// サーバー側のID整合(別issue)が入れば自動的に効くようになる。
+// realtimeイベントのidはDB行のUUID(log_id)を優先して使うため
+// (packages/logging/src/application/log-stream.ts:toRealtimeLogMessage)、
+// ページネーション結果(DB行UUID)とここでdedupeが成立する。
 export function mergeEntriesById(
   realtimeEntries: LogEntryData[],
   paginatedEntries: LogEntryData[]
