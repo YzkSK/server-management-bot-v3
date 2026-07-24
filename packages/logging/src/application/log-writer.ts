@@ -98,9 +98,15 @@ export async function writeLogEvent(
   // がnullのまま残り、backfillが後から検出する。
   try {
     await Promise.all([
-      appendLogEventToStream(deps.redis, eventToPersist, { realtimeEnabled }),
+      appendLogEventToStream(deps.redis, eventToPersist, {
+        realtimeEnabled,
+        logId: log.id
+      }),
       realtimeEnabled
-        ? appendRealtimeLogEventToStream(deps.redis, eventToPersist, { realtimeEnabled })
+        ? appendRealtimeLogEventToStream(deps.redis, eventToPersist, {
+            realtimeEnabled,
+            logId: log.id
+          })
         : Promise.resolve()
     ]);
   } catch (err) {

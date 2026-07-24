@@ -446,7 +446,7 @@ describe("writeLogEvent", () => {
     const getGuildLogMode = createFakeGetGuildLogMode("full");
     const upsertGuild = createFakeUpsertGuild();
     const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
-    const { redis } = createFakeRedis();
+    const { redis, calls } = createFakeRedis();
     const db = {} as DbClient;
 
     await writeLogEvent(
@@ -457,6 +457,29 @@ describe("writeLogEvent", () => {
     assert.equal(markLogEventStreamSynced.mock.calls.length, 1);
     assert.equal(markLogEventStreamSynced.mock.calls[0]?.arguments[0], db);
     assert.equal(markLogEventStreamSynced.mock.calls[0]?.arguments[1], "log-1");
+
+    // 実DBのUUIDがRedis Streamのlog_idフィールドに流れることを確認(cross-source dedupのため)。
+    assert.equal(calls[0]?.fields.log_id, "log-1");
+  });
+
+  it("carries the DB log id into both the shared and per-guild realtime stream entries", async () => {
+    const insertedLog = { id: "log-2" } as Awaited<ReturnType<typeof InsertLogEvent>>;
+    const insertLogEvent = mock.fn<typeof InsertLogEvent>(async () => insertedLog);
+    const getGuildLogMode = createFakeGetGuildLogMode("full");
+    const upsertGuild = createFakeUpsertGuild();
+    const markLogEventStreamSynced = createFakeMarkLogEventStreamSynced();
+    const { redis, calls } = createFakeRedis();
+    const db = {} as DbClient;
+    const event: NormalizedEvent = { ...baseEvent, eventName: "message.delete" };
+
+    await writeLogEvent(
+      { db, redis, insertLogEvent, getGuildLogMode, upsertGuild, markLogEventStreamSynced },
+      event
+    );
+
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0]?.fields.log_id, "log-2");
+    assert.equal(calls[1]?.fields.log_id, "log-2");
   });
 
   it("scrubs sensitive strings from the payload before persisting", async () => {

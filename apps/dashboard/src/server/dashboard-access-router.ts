@@ -10,8 +10,8 @@ import {
 import { protectedProcedure, requireCapability, router } from "@sm-bot/dashboard-access";
 import { parseDashboardAuthEnv } from "@sm-bot/config";
 
-import { getDashboardDb, getDashboardRedisClient } from "./trpc-context";
-import { resolveMyGuilds } from "./resolve-my-guilds";
+import { getDashboardDb, getDashboardRedisClient } from "./trpc-context.ts";
+import { resolveMyGuilds } from "./resolve-my-guilds.ts";
 
 const env = parseDashboardAuthEnv();
 

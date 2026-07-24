@@ -8,7 +8,7 @@ import { createClient, type RedisClientType } from "redis";
 import {
   resolveDashboardAccessForRequest as resolveDashboardAccessForRequestDefault,
   type ResolvedDashboardAccess
-} from "./resolve-dashboard-access";
+} from "./resolve-dashboard-access.ts";
 
 const env = parseDashboardAuthEnv();
 

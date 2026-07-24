@@ -8,6 +8,7 @@ export const REALTIME_LOGS_STREAM_PREFIX = "rt:logs:";
 
 export interface AppendLogEventOptions {
   realtimeEnabled?: boolean;
+  logId?: string;
 }
 
 export interface LogStreamFields extends Record<string, string> {
@@ -20,6 +21,7 @@ export interface LogStreamFields extends Record<string, string> {
   received_at: string;
   realtime_enabled: string;
   payload: string;
+  log_id: string;
 }
 
 export interface RedisStreamWriter {
@@ -74,13 +76,14 @@ export function toLogStreamFields(
     event_timestamp: parsedEvent.eventTimestamp.toISOString(),
     received_at: parsedEvent.receivedAt.toISOString(),
     realtime_enabled: options.realtimeEnabled === true ? "1" : "0",
-    payload: JSON.stringify(parsedEvent.payload)
+    payload: JSON.stringify(parsedEvent.payload),
+    log_id: options.logId ?? ""
   };
 }
 
 export function toRealtimeLogMessage(message: RedisStreamMessage) {
   return {
-    id: message.id,
+    id: message.message.log_id || message.id,
     eventName: message.message.event_name ?? "",
     guildId: emptyToNull(message.message.guild_id),
     actorId: emptyToNull(message.message.actor_id),

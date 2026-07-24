@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { deriveLogsPageState, type LogsQueryResult } from "./page";
+import {
+  deriveLogsPageState,
+  mergeEntriesById,
+  type LogsQueryResult
+} from "./page";
 
 const ENTRY = {
   id: "log-1",
@@ -90,5 +94,31 @@ describe("deriveLogsPageState", () => {
       hasNextPage: true,
       isFetchingNextPage: false
     });
+  });
+});
+
+describe("mergeEntriesById", () => {
+  test("prepends realtime entries ahead of paginated entries", () => {
+    const realtimeEntry = { ...ENTRY, id: "realtime-1" };
+    const paginatedEntry = { ...ENTRY, id: "log-2" };
+
+    expect(mergeEntriesById([realtimeEntry], [paginatedEntry])).toEqual([
+      realtimeEntry,
+      paginatedEntry
+    ]);
+  });
+
+  test("dedupes by id, keeping the realtime (first-seen) occurrence", () => {
+    const realtimeEntry = { ...ENTRY, id: "log-1", eventName: "realtime-version" };
+    const paginatedEntry = { ...ENTRY, id: "log-1", eventName: "paginated-version" };
+
+    expect(mergeEntriesById([realtimeEntry], [paginatedEntry])).toEqual([realtimeEntry]);
+  });
+
+  test("dedupes duplicate ids within the realtime list itself", () => {
+    const first = { ...ENTRY, id: "dup", eventName: "first" };
+    const second = { ...ENTRY, id: "dup", eventName: "second" };
+
+    expect(mergeEntriesById([first, second], [])).toEqual([first]);
   });
 });
