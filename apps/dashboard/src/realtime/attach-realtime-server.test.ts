@@ -167,4 +167,30 @@ describe("createRealtimeLogsConnectionHandler", () => {
 
     expect(pollCount).toBe(countAfterUnsubscribe);
   });
+
+  test("resumes polling after unsubscribe then re-subscribe (does not permanently disable the socket)", async () => {
+    const socket = new FakeSocket();
+    let pollCount = 0;
+    const handler = createRealtimeLogsConnectionHandler(
+      deps({
+        poll: async () => {
+          pollCount += 1;
+          return { messages: [], nextId: "$" };
+        }
+      })
+    );
+
+    handler(socket as never);
+    socket.emit(REALTIME_LOGS_SUBSCRIBE, { guildId: "guild-1" });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    socket.emit(REALTIME_LOGS_UNSUBSCRIBE);
+    const countAfterUnsubscribe = pollCount;
+
+    socket.emit(REALTIME_LOGS_SUBSCRIBE, { guildId: "guild-1" });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(pollCount).toBeGreaterThan(countAfterUnsubscribe);
+
+    socket.emit("disconnect");
+  });
 });
