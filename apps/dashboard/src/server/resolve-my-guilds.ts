@@ -2,8 +2,8 @@ import { DiscordUnknownGuildError, type DashboardAccessCacheClient } from "@sm-b
 import type { DbClient } from "@sm-bot/db";
 import { getKnownGuildIds as getKnownGuildIdsFromDb } from "@sm-bot/db";
 
-import { fetchCurrentUserDiscordGuilds as fetchCurrentUserDiscordGuildsFromDiscord } from "./discord-user-guilds";
-import { resolveDashboardAccessForRequest as resolveDashboardAccessForRequestDefault } from "./resolve-dashboard-access";
+import { fetchCurrentUserDiscordGuilds as fetchCurrentUserDiscordGuildsFromDiscord } from "./discord-user-guilds.ts";
+import { resolveDashboardAccessForRequest as resolveDashboardAccessForRequestDefault } from "./resolve-dashboard-access.ts";
 
 export interface ResolveMyGuildsInput {
   db: DbClient;
