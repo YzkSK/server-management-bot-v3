@@ -34,6 +34,7 @@
         "@sm-bot/config": "workspace:*",
         "@sm-bot/dashboard-access": "workspace:*",
         "@sm-bot/db": "workspace:*",
+        "@sm-bot/logging": "workspace:*",
         "@sm-bot/shared": "workspace:*",
         "@tanstack/react-query": "^5.80.3",
         "@tanstack/react-table": "^8.21.3",
@@ -117,9 +118,12 @@
       "name": "@sm-bot/logging",
       "version": "0.1.0",
       "dependencies": {
+        "@sm-bot/dashboard-access": "workspace:*",
         "@sm-bot/db": "workspace:*",
         "@sm-bot/shared": "workspace:*",
+        "@trpc/server": "^11.0.0",
         "discord.js": "^14.27.0",
+        "zod": "^3.24.1",
       },
       "devDependencies": {
         "typescript": "^7.0.2",

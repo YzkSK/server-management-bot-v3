@@ -36,3 +36,4 @@ export * from "./discord/guild-log-handlers.js";
 export * from "./discord/thread-events.js";
 export * from "./discord/thread-log-handlers.js";
 export * from "./domain/realtime-policy.js";
+export * from "./router/logs-router.js";
