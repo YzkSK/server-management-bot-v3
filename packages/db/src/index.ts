@@ -1,4 +1,5 @@
 export * from "./client.js";
+export * from "./maintenance/archive-logs.js";
 export * from "./repositories/dashboard-access.js";
 export * from "./repositories/guild-configs.js";
 export * from "./repositories/guilds.js";

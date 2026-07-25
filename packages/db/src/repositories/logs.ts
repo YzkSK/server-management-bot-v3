@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, like, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, like, lt, or } from "drizzle-orm";
 import type { NormalizedEvent } from "@sm-bot/shared";
 
 import type { DbClient } from "../client.js";
@@ -94,10 +94,12 @@ export async function deleteLogEventsOlderThan(
   db: DbClient,
   options: { cutoff: Date; limit: number }
 ): Promise<number> {
+  // archivedAt IS NOT NULL until archive-logs-runner confirms the row was
+  // written to a .json.gz archive, so retention never deletes unarchived data.
   const targetIds = db
     .select({ id: logs.id })
     .from(logs)
-    .where(lt(logs.receivedAt, options.cutoff))
+    .where(and(lt(logs.receivedAt, options.cutoff), isNotNull(logs.archivedAt)))
     .orderBy(asc(logs.receivedAt), asc(logs.id))
     .limit(options.limit);
 
@@ -120,6 +122,65 @@ export interface LogEventRow {
   receivedAt: Date;
   realtimeEnabled: boolean;
   payload: Record<string, unknown>;
+}
+
+export interface ArchivableLogEventRow extends LogEventRow {
+  streamSyncedAt: Date | null;
+  archivedAt: Date | null;
+}
+
+export async function selectLogEventsOlderThan(
+  db: DbClient,
+  options: { cutoff: Date; limit: number; after?: { receivedAt: Date; id: string } }
+): Promise<ArchivableLogEventRow[]> {
+  const conditions = [lt(logs.receivedAt, options.cutoff), isNull(logs.archivedAt)];
+
+  if (options.after) {
+    const cursorFilter = or(
+      gt(logs.receivedAt, options.after.receivedAt),
+      and(eq(logs.receivedAt, options.after.receivedAt), gt(logs.id, options.after.id))
+    );
+    if (cursorFilter) {
+      conditions.push(cursorFilter);
+    }
+  }
+
+  const rows = await db
+    .select({
+      id: logs.id,
+      eventName: logs.eventName,
+      guildId: logs.guildId,
+      actorId: logs.actorId,
+      channelId: logs.channelId,
+      messageId: logs.messageId,
+      eventTimestamp: logs.eventTimestamp,
+      receivedAt: logs.receivedAt,
+      realtimeEnabled: logs.realtimeEnabled,
+      payload: logs.payload,
+      streamSyncedAt: logs.streamSyncedAt,
+      archivedAt: logs.archivedAt
+    })
+    .from(logs)
+    .where(and(...conditions))
+    .orderBy(asc(logs.receivedAt), asc(logs.id))
+    .limit(options.limit);
+
+  return rows as ArchivableLogEventRow[];
+}
+
+export async function markLogEventsArchived(
+  db: DbClient,
+  ids: readonly string[]
+): Promise<number> {
+  if (ids.length === 0) return 0;
+
+  const marked = await db
+    .update(logs)
+    .set({ archivedAt: new Date() })
+    .where(inArray(logs.id, ids))
+    .returning({ id: logs.id });
+
+  return marked.length;
 }
 
 export interface ListLogEventsInput {

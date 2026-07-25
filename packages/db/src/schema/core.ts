@@ -120,7 +120,10 @@ export const logs = pgTable(
     payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
     // stream書き込みが未完了/失敗のレコードを示すoutboxマーカー。
     // null = 未同期。backfillUnsyncedLogEventsがこのカラムを使って再送対象を検出する(issue #103)。
-    streamSyncedAt: timestamp("stream_synced_at", { withTimezone: true })
+    streamSyncedAt: timestamp("stream_synced_at", { withTimezone: true }),
+    // .json.gzへのアーカイブ完了時刻。null = 未アーカイブ。
+    // archive-logs-runnerが完了後にマークし、log-retentionはこの列がnullの行を削除しない(issue #32)。
+    archivedAt: timestamp("archived_at", { withTimezone: true })
   },
   (table) => ({
     eventNameIdx: index("logs_event_name_idx").on(table.eventName),
@@ -136,6 +139,11 @@ export const logs = pgTable(
     // ほぼ全行が最終的にsync済みになるため、全件対象のindexだと肥大化し続ける(issue #103レビュー指摘)。
     streamSyncedAtIdx: index("logs_stream_synced_at_idx")
       .on(table.receivedAt)
-      .where(sql`${table.streamSyncedAt} IS NULL`)
+      .where(sql`${table.streamSyncedAt} IS NULL`),
+    // 未アーカイブ(archivedAt IS NULL)の行だけを対象にした部分index。
+    // archive-logs-runnerの選択クエリとlog-retentionの削除ガードの両方が使う(issue #32)。
+    archivedAtIdx: index("logs_archived_at_idx")
+      .on(table.receivedAt)
+      .where(sql`${table.archivedAt} IS NULL`)
   })
 );
