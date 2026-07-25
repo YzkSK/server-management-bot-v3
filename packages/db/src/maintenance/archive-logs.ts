@@ -14,6 +14,10 @@ export interface ArchiveSummary {
 
 const ARCHIVE_CUTOFF_DAYS = 180;
 
+// Arbitrary constant identifying the logs:archive advisory lock namespace;
+// only needs to be unique among pg_advisory_lock() callers in this codebase.
+export const ARCHIVE_LOCK_KEY = 875_302_614;
+
 export function calculateArchiveCutoff(now = new Date()): Date {
   return subtractUtcDays(now, ARCHIVE_CUTOFF_DAYS);
 }

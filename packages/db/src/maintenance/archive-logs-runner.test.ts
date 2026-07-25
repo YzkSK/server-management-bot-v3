@@ -15,7 +15,11 @@ import { eq } from "drizzle-orm";
 import { createDbConnection, type DbConnection } from "../client.js";
 import { insertLogEvent } from "../repositories/logs.js";
 import { guilds, logs } from "../schema/index.js";
-import { createArchiveFileName, resolveArchiveDir } from "./archive-logs.js";
+import {
+  ARCHIVE_LOCK_KEY,
+  createArchiveFileName,
+  resolveArchiveDir
+} from "./archive-logs.js";
 
 const TEST_GUILD_ID = `archive-runner-${randomUUID()}`;
 const LOCAL_DB_HOSTS = ["localhost", "127.0.0.1"];
@@ -65,6 +69,19 @@ async function runArchiveLogs(
     console.error("archive-logs-runner child process failed", err);
     const execErr = err as { status: number | null };
     return { status: execErr.status ?? 1, summary: null };
+  }
+}
+
+function runArchiveLogsRaw(archiveDir: string): { status: number; stdout: string } {
+  try {
+    const stdout = execFileSync(process.execPath, [RUNNER_PATH], {
+      env: { ...process.env, ARCHIVE_DIR: archiveDir },
+      encoding: "utf8"
+    });
+    return { status: 0, stdout };
+  } catch (err) {
+    const execErr = err as { status: number | null; stdout?: string };
+    return { status: execErr.status ?? 1, stdout: execErr.stdout ?? "" };
   }
 }
 
@@ -195,4 +212,30 @@ describe("archive-logs-runner", () => {
     assert.deepEqual(contentAfterCollision, placeholderContent);
   });
 
+  it("skips the run instead of double-archiving when another run already holds the lock", async () => {
+    const target = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date("2020-01-01T00:00:00.000Z"),
+      receivedAt: new Date("2020-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+
+    // Held on a dedicated reserved connection (mirroring how the runner
+    // itself holds it) so acquire and release land on the same session.
+    const lockSession = await connection.client.reserve();
+    try {
+      await lockSession`SELECT pg_advisory_lock(${ARCHIVE_LOCK_KEY})`;
+
+      const result = runArchiveLogsRaw(archiveDir);
+      assert.equal(result.status, 0);
+      assert.match(result.stdout, /skipping/);
+    } finally {
+      await lockSession`SELECT pg_advisory_unlock(${ARCHIVE_LOCK_KEY})`;
+      lockSession.release();
+    }
+
+    const [row] = await connection.db.select().from(logs).where(eq(logs.id, target.id));
+    assert.equal(row?.archivedAt, null);
+  });
 });
