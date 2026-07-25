@@ -61,10 +61,12 @@ async function main() {
 
   // Session-scoped lock held on a dedicated reserved connection for the
   // whole run, so a second concurrent `logs:archive` invocation can't select
-  // and publish the same rows before this run marks them archived.
-  const lockSession = await client.reserve();
+  // and publish the same rows before this run marks them archived. Acquired
+  // inside the try block so a reserve() failure still reaches finally/close().
+  let lockSession: Awaited<ReturnType<typeof client.reserve>> | undefined;
 
   try {
+    lockSession = await client.reserve();
     const [lockRow] = await lockSession<{ locked: boolean }[]>`
       SELECT pg_try_advisory_lock(${ARCHIVE_LOCK_KEY}) AS locked
     `;
@@ -152,9 +154,11 @@ async function main() {
     // release()/close() must run even if the unlock call itself fails, or a
     // stuck connection leaves the one-shot process hanging instead of exiting.
     try {
-      await lockSession`SELECT pg_advisory_unlock(${ARCHIVE_LOCK_KEY})`;
+      if (lockSession) {
+        await lockSession`SELECT pg_advisory_unlock(${ARCHIVE_LOCK_KEY})`;
+      }
     } finally {
-      lockSession.release();
+      lockSession?.release();
       await close();
     }
   }
