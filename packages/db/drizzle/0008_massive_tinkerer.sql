@@ -1,0 +1,2 @@
+ALTER TABLE "logs" ADD COLUMN "archived_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "logs_archived_at_idx" ON "logs" USING btree ("received_at") WHERE "logs"."archived_at" IS NULL;

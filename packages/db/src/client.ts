@@ -16,6 +16,7 @@ export function createDbConnection(
   });
 
   return {
+    client,
     db: drizzle(client, { schema }),
     close: () => client.end({ timeout: DB_CLOSE_TIMEOUT_SEC })
   };

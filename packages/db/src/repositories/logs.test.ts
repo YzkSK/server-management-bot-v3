@@ -13,7 +13,9 @@ import {
   getUnsyncedLogEvents,
   insertLogEvent,
   listLogEvents,
-  markLogEventStreamSynced
+  markLogEventsArchived,
+  markLogEventStreamSynced,
+  selectLogEventsOlderThan
 } from "./logs.js";
 
 const TEST_GUILD_ID = `logs-repo-${randomUUID()}`;
@@ -196,7 +198,11 @@ describe("deleteLogEventsOlderThan", () => {
     await connection.db.insert(guilds).values({ guildId: TEST_GUILD_ID });
   });
 
-  it("deletes only rows older than the cutoff and returns the deleted count", async () => {
+  async function markArchived(id: string) {
+    await connection.db.update(logs).set({ archivedAt: new Date() }).where(eq(logs.id, id));
+  }
+
+  it("deletes only archived rows older than the cutoff and returns the deleted count", async () => {
     const old = await insertLogEvent(connection.db, {
       eventName: "member.join",
       guildId: TEST_GUILD_ID,
@@ -204,6 +210,7 @@ describe("deleteLogEventsOlderThan", () => {
       receivedAt: new Date("2020-01-01T00:00:00.000Z"),
       payload: {}
     });
+    await markArchived(old.id);
     const recent = await insertLogEvent(connection.db, {
       eventName: "member.join",
       guildId: TEST_GUILD_ID,
@@ -211,6 +218,7 @@ describe("deleteLogEventsOlderThan", () => {
       receivedAt: new Date(),
       payload: {}
     });
+    await markArchived(recent.id);
 
     const deleted = await deleteLogEventsOlderThan(connection.db, {
       cutoff: new Date("2021-01-01T00:00:00.000Z"),
@@ -225,6 +233,24 @@ describe("deleteLogEventsOlderThan", () => {
       .from(logs)
       .where(eq(logs.id, recent.id));
     assert.ok(recentRow);
+  });
+
+  it("does not delete rows past the cutoff that are not yet archived", async () => {
+    const unarchived = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2020-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+
+    await deleteLogEventsOlderThan(connection.db, {
+      cutoff: new Date("2021-01-01T00:00:00.000Z"),
+      limit: 100
+    });
+
+    const [row] = await connection.db.select().from(logs).where(eq(logs.id, unarchived.id));
+    assert.ok(row, "unarchived row past the cutoff must survive deletion");
   });
 
   it("respects the limit and returns 0 when nothing matches", async () => {
@@ -244,6 +270,7 @@ describe("deleteLogEventsOlderThan", () => {
       receivedAt: new Date("2020-01-01T00:00:00.000Z"),
       payload: {}
     });
+    await markArchived(first.id);
     const second = await insertLogEvent(connection.db, {
       eventName: "member.join",
       guildId: TEST_GUILD_ID,
@@ -251,6 +278,7 @@ describe("deleteLogEventsOlderThan", () => {
       receivedAt: new Date("2020-01-02T00:00:00.000Z"),
       payload: {}
     });
+    await markArchived(second.id);
 
     const deleted = await deleteLogEventsOlderThan(connection.db, {
       cutoff: new Date("2021-01-01T00:00:00.000Z"),
@@ -264,6 +292,185 @@ describe("deleteLogEventsOlderThan", () => {
       .where(eq(logs.guildId, TEST_GUILD_ID));
     assert.equal(remaining.length, 1);
     assert.equal(remaining[0]?.id, second.id);
+  });
+});
+
+describe("selectLogEventsOlderThan", () => {
+  let connection: DbConnection;
+
+  before(() => {
+    const databaseUrl = parseDatabaseEnv().DATABASE_URL;
+    assertLocalDatabase(databaseUrl);
+    connection = createDbConnection(databaseUrl);
+  });
+
+  after(async () => {
+    await connection.db.delete(logs).where(eq(logs.guildId, TEST_GUILD_ID));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, TEST_GUILD_ID));
+    await connection.close();
+  });
+
+  beforeEach(async () => {
+    await connection.db.delete(logs).where(eq(logs.guildId, TEST_GUILD_ID));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, TEST_GUILD_ID));
+    await connection.db.insert(guilds).values({ guildId: TEST_GUILD_ID });
+  });
+
+  it("returns only rows older than the cutoff, ordered oldest first", async () => {
+    const old = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2020-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+    const recent = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date(),
+      payload: {}
+    });
+
+    const rows = await selectLogEventsOlderThan(connection.db, {
+      cutoff: new Date("2021-01-01T00:00:00.000Z"),
+      limit: 100
+    });
+
+    const ownIds = rows.filter((row) => row.guildId === TEST_GUILD_ID).map((row) => row.id);
+    assert.deepEqual(ownIds, [old.id]);
+    assert.ok(!ownIds.includes(recent.id));
+  });
+
+  it("excludes rows that have already been marked archived", async () => {
+    const archived = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2020-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+    await connection.db
+      .update(logs)
+      .set({ archivedAt: new Date() })
+      .where(eq(logs.id, archived.id));
+    const unarchived = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2020-01-02T00:00:00.000Z"),
+      payload: {}
+    });
+
+    const rows = await selectLogEventsOlderThan(connection.db, {
+      cutoff: new Date("2021-01-01T00:00:00.000Z"),
+      limit: 100
+    });
+
+    const ownIds = rows.filter((row) => row.guildId === TEST_GUILD_ID).map((row) => row.id);
+    assert.deepEqual(ownIds, [unarchived.id]);
+  });
+
+  it("does not delete rows and paginates via the after cursor", async () => {
+    const first = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2000-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+    const second = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2000-01-02T00:00:00.000Z"),
+      payload: {}
+    });
+
+    // Ordering among our own rows, regardless of unrelated pre-existing rows
+    // in the shared, non-guild-scoped dev DB.
+    const allRows = await selectLogEventsOlderThan(connection.db, {
+      cutoff: new Date("2021-01-01T00:00:00.000Z"),
+      limit: 10_000
+    });
+    assert.deepEqual(
+      allRows.filter((row) => row.guildId === TEST_GUILD_ID).map((row) => row.id),
+      [first.id, second.id]
+    );
+
+    // Cursor uses a known row's own (receivedAt, id) directly rather than
+    // trusting a limit:1 query to return exactly this test's row, since a
+    // pre-existing older row elsewhere in the DB would make that flaky.
+    const secondPage = await selectLogEventsOlderThan(connection.db, {
+      cutoff: new Date("2021-01-01T00:00:00.000Z"),
+      limit: 100,
+      after: { receivedAt: first.receivedAt, id: first.id }
+    });
+    assert.deepEqual(
+      secondPage.filter((row) => row.guildId === TEST_GUILD_ID).map((row) => row.id),
+      [second.id]
+    );
+
+    const stillPresent = await connection.db
+      .select()
+      .from(logs)
+      .where(eq(logs.id, first.id));
+    assert.ok(stillPresent[0]);
+  });
+});
+
+describe("markLogEventsArchived", () => {
+  let connection: DbConnection;
+
+  before(() => {
+    const databaseUrl = parseDatabaseEnv().DATABASE_URL;
+    assertLocalDatabase(databaseUrl);
+    connection = createDbConnection(databaseUrl);
+  });
+
+  after(async () => {
+    await connection.db.delete(logs).where(eq(logs.guildId, TEST_GUILD_ID));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, TEST_GUILD_ID));
+    await connection.close();
+  });
+
+  beforeEach(async () => {
+    await connection.db.delete(logs).where(eq(logs.guildId, TEST_GUILD_ID));
+    await connection.db.delete(guilds).where(eq(guilds.guildId, TEST_GUILD_ID));
+    await connection.db.insert(guilds).values({ guildId: TEST_GUILD_ID });
+  });
+
+  it("marks only the given ids as archived", async () => {
+    const target = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2020-01-01T00:00:00.000Z"),
+      payload: {}
+    });
+    const untouched = await insertLogEvent(connection.db, {
+      eventName: "member.join",
+      guildId: TEST_GUILD_ID,
+      eventTimestamp: new Date(0),
+      receivedAt: new Date("2020-01-02T00:00:00.000Z"),
+      payload: {}
+    });
+
+    const marked = await markLogEventsArchived(connection.db, [target.id]);
+
+    assert.equal(marked, 1);
+    const [targetRow] = await connection.db.select().from(logs).where(eq(logs.id, target.id));
+    assert.ok(targetRow?.archivedAt instanceof Date);
+    const [untouchedRow] = await connection.db
+      .select()
+      .from(logs)
+      .where(eq(logs.id, untouched.id));
+    assert.equal(untouchedRow?.archivedAt, null);
+  });
+
+  it("returns 0 without querying when given an empty id list", async () => {
+    const marked = await markLogEventsArchived(connection.db, []);
+    assert.equal(marked, 0);
   });
 });
 

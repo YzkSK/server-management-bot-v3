@@ -57,6 +57,13 @@
       "when": 1784586921208,
       "tag": "0007_backfill_existing_logs_stream_synced_at",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784932774477,
+      "tag": "0008_massive_tinkerer",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 import type { DbClient, deleteLogEventsOlderThan } from "@sm-bot/db";
 
-export const DEFAULT_LOG_RETENTION_DAYS = 180;
+export const DEFAULT_LOG_RETENTION_DAYS = 365;
 export const DEFAULT_RETENTION_BATCH_SIZE = 500;
 
 export interface LogRetentionDeps {
