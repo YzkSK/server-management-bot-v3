@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { trpc } from "../trpc-client";
 
 export type HomePageState =
@@ -12,29 +14,53 @@ export type HomePageState =
   | { kind: "authorized"; data: { userId: string; isGuildOwner: boolean; capabilities: string } };
 
 export function HomePageView({ state }: { state: HomePageState }) {
-  if (state.kind === "loading") {
-    return <main>Loading...</main>;
-  }
-
-  if (state.kind === "unauthorized") {
-    return (
-      <main>
-        <p>Not logged in.</p>
-        <button onClick={() => signIn("discord")}>Login with Discord</button>
-      </main>
-    );
-  }
-
-  if (state.kind === "error") {
-    return <main>Error: {state.message}</main>;
-  }
-
   return (
-    <main>
-      <p>Logged in as {state.data.userId}</p>
-      <p>Guild owner: {state.data.isGuildOwner ? "yes" : "no"}</p>
-      <p>Capabilities: {state.data.capabilities}</p>
-      <Link href="/g">Select a server</Link>
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-sm">
+        {state.kind === "loading" ? (
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </CardContent>
+        ) : null}
+
+        {state.kind === "unauthorized" ? (
+          <>
+            <CardHeader>
+              <CardTitle>Not logged in.</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button type="button" onClick={() => signIn("discord")}>
+                Login with Discord
+              </Button>
+            </CardContent>
+          </>
+        ) : null}
+
+        {state.kind === "error" ? (
+          <CardContent>
+            <p className="text-sm text-destructive">Error: {state.message}</p>
+          </CardContent>
+        ) : null}
+
+        {state.kind === "authorized" ? (
+          <>
+            <CardHeader>
+              <CardTitle>Logged in as {state.data.userId}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">
+                Guild owner: {state.data.isGuildOwner ? "yes" : "no"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Capabilities: {state.data.capabilities}
+              </p>
+              <Button asChild>
+                <Link href="/g">Select a server</Link>
+              </Button>
+            </CardContent>
+          </>
+        ) : null}
+      </Card>
     </main>
   );
 }
