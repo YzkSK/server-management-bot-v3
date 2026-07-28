@@ -33,7 +33,7 @@ export function GuildShell({
           <Link
             href={`/g/${guildId}${item.hrefSuffix}`}
             key={item.hrefSuffix}
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="rounded-sm text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {item.label}
           </Link>

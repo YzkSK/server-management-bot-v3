@@ -19,7 +19,9 @@ export function HomePageView({ state }: { state: HomePageState }) {
       <Card className="w-full max-w-sm">
         {state.kind === "loading" ? (
           <CardContent>
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+              Loading...
+            </p>
           </CardContent>
         ) : null}
 
@@ -38,7 +40,9 @@ export function HomePageView({ state }: { state: HomePageState }) {
 
         {state.kind === "error" ? (
           <CardContent>
-            <p className="text-sm text-destructive">Error: {state.message}</p>
+            <p role="alert" className="text-sm text-destructive">
+              Error: {state.message}
+            </p>
           </CardContent>
         ) : null}
 
