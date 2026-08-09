@@ -5,7 +5,7 @@ import { useState } from "react";
 import { CAP } from "@sm-bot/shared";
 import type { GuildLogMode } from "@sm-bot/db";
 
-import { useCapability } from "../../../../lib/use-capability";
+import { hasCapabilityFromWireString } from "../../../../lib/use-capability";
 import { trpc } from "../../../../trpc-client";
 import { SettingsPageView, type SettingsPageState } from "./settings-view";
 
@@ -16,21 +16,32 @@ export interface LogModeQueryResult {
 }
 
 export function deriveSettingsPageState(input: {
-  canManageLoggingSettings: boolean;
+  // undefined = 権限確認中(まだ判定できない)。boolean確定後に
+  // "no-permission" / 通常フローへ分岐する。
+  canManageLoggingSettings: boolean | undefined;
   query: LogModeQueryResult;
+  // 直近の保存成功で確定したlogMode。setLogModeのレスポンスから設定され、
+  // 保存後のrefetchが失敗してquery.dataが古いままでもUIが正しい値を表示できるようにする。
+  confirmedLogMode: GuildLogMode | null;
   selectedLogMode: GuildLogMode | null;
   isSaving: boolean;
   saveError: string | null;
 }): SettingsPageState {
+  if (input.canManageLoggingSettings === undefined) {
+    return { kind: "loading" };
+  }
+
   if (!input.canManageLoggingSettings) {
     return { kind: "no-permission" };
   }
 
-  if (input.query.data) {
+  const logMode = input.confirmedLogMode ?? input.query.data?.logMode;
+
+  if (logMode !== undefined) {
     return {
       kind: "loaded",
-      logMode: input.query.data.logMode,
-      selectedLogMode: input.selectedLogMode ?? input.query.data.logMode,
+      logMode,
+      selectedLogMode: input.selectedLogMode ?? logMode,
       isSaving: input.isSaving,
       saveError: input.saveError
     };
@@ -44,16 +55,24 @@ export function deriveSettingsPageState(input: {
 }
 
 export default function GuildSettingsPage() {
-  const canManageLoggingSettings = useCapability(CAP.MANAGE_LOGGING_SETTINGS);
+  const meQuery = trpc.dashboardAccess.me.useQuery();
+  const canManageLoggingSettings = meQuery.isLoading
+    ? undefined
+    : hasCapabilityFromWireString(meQuery.data?.capabilities, CAP.MANAGE_LOGGING_SETTINGS);
+
   const [selectedLogMode, setSelectedLogMode] = useState<GuildLogMode | null>(null);
+  const [confirmedLogMode, setConfirmedLogMode] = useState<GuildLogMode | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const query = trpc.logs.getLogMode.useQuery(undefined, { enabled: canManageLoggingSettings });
+  const query = trpc.logs.getLogMode.useQuery(undefined, {
+    enabled: canManageLoggingSettings === true
+  });
   const mutation = trpc.logs.setLogMode.useMutation();
 
   const state = deriveSettingsPageState({
     canManageLoggingSettings,
     query,
+    confirmedLogMode,
     selectedLogMode,
     isSaving: mutation.isPending,
     saveError
@@ -61,11 +80,16 @@ export default function GuildSettingsPage() {
 
   function handleSave() {
     if (state.kind !== "loaded") return;
+    const requestedLogMode = state.selectedLogMode;
     setSaveError(null);
     mutation.mutate(
-      { logMode: state.selectedLogMode },
+      { logMode: requestedLogMode },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
+          // ミューテーションのレスポンスを確定値として即座に反映する。
+          // refetch()が失敗しても、保存成功自体はUIに正しく反映され続ける。
+          setConfirmedLogMode(result.logMode);
+          setSelectedLogMode((current) => (current === requestedLogMode ? null : current));
           void query.refetch();
         },
         onError: (error) => setSaveError(error.message)
