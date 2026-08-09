@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { deriveSettingsPageState, type LogModeQueryResult } from "./page";
+import { deriveSettingsPageState, nextLogModeSelection, type LogModeQueryResult } from "./page";
 
 const NOT_FETCHED: LogModeQueryResult = { data: undefined, error: null, isFetching: false };
 
@@ -75,6 +75,37 @@ describe("deriveSettingsPageState", () => {
         saveError: null
       })
     ).toEqual({ kind: "error", message: "boom", isRetrying: true });
+  });
+
+  test("returns an error state (not no-permission) when the permission check itself fails", () => {
+    // meQuery.isLoadingはクエリがエラーで終わった場合もfalseになる。
+    // それをそのままno-permission判定に使うと、実際は権限確認自体が失敗しているだけなのに
+    // 「権限がありません」という誤った表示になってしまう。
+    expect(
+      deriveSettingsPageState({
+        canManageLoggingSettings: undefined,
+        permissionCheckError: { message: "network error" },
+        permissionCheckIsFetching: false,
+        query: NOT_FETCHED,
+        selectedLogMode: null,
+        isSaving: false,
+        saveError: null
+      })
+    ).toEqual({ kind: "error", message: "network error", isRetrying: false });
+  });
+
+  test("marks the permission-check error state as retrying while a refetch is in flight", () => {
+    expect(
+      deriveSettingsPageState({
+        canManageLoggingSettings: undefined,
+        permissionCheckError: { message: "network error" },
+        permissionCheckIsFetching: true,
+        query: NOT_FETCHED,
+        selectedLogMode: null,
+        isSaving: false,
+        saveError: null
+      })
+    ).toEqual({ kind: "error", message: "network error", isRetrying: true });
   });
 
   test("defaults selectedLogMode to the fetched value when the user hasn't touched the form yet", () => {
@@ -179,6 +210,18 @@ describe("deriveSettingsPageState", () => {
       logMode: "full",
       selectedLogMode: "full",
       isSaving: false,
+      saveError: null
+    });
+  });
+});
+
+describe("nextLogModeSelection", () => {
+  test("clears a stale saveError when the user changes the selection instead of retrying save", () => {
+    // 保存が失敗した後、ユーザーが保存を再試行せずに別の選択肢を選んだ場合、
+    // 古い選択に対するsaveErrorが残ったままになると、あたかも新しい選択でも
+    // 失敗したかのように誤解を招く表示になってしまう。
+    expect(nextLogModeSelection("disabled")).toEqual({
+      selectedLogMode: "disabled",
       saveError: null
     });
   });

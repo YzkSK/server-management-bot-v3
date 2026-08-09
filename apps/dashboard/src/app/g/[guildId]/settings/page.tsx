@@ -19,12 +19,24 @@ export function deriveSettingsPageState(input: {
   // undefined = 権限確認中(まだ判定できない)。boolean確定後に
   // "no-permission" / 通常フローへ分岐する。
   canManageLoggingSettings: boolean | undefined;
+  // 権限確認クエリ(dashboardAccess.me)自体がエラーで終わった場合の情報。
+  // isLoadingはエラー終了時もfalseになるため、canManageLoggingSettingsだけでは
+  // 「権限なし」と「確認自体が失敗した」を区別できない。
+  permissionCheckError?: { message: string } | null;
+  permissionCheckIsFetching?: boolean;
   query: LogModeQueryResult;
   selectedLogMode: GuildLogMode | null;
   isSaving: boolean;
   saveError: string | null;
 }): SettingsPageState {
   if (input.canManageLoggingSettings === undefined) {
+    if (input.permissionCheckError) {
+      return {
+        kind: "error",
+        message: input.permissionCheckError.message,
+        isRetrying: input.permissionCheckIsFetching ?? false
+      };
+    }
     return { kind: "loading" };
   }
 
@@ -49,11 +61,23 @@ export function deriveSettingsPageState(input: {
   return { kind: "loading" };
 }
 
+// 選択された記録モードを変更する際、直前の保存試行に対するsaveErrorは
+// もはや意味を持たない(まだ再試行していないのに古いエラーが残り続けるのを防ぐ)。
+export function nextLogModeSelection(nextLogMode: GuildLogMode): {
+  selectedLogMode: GuildLogMode;
+  saveError: null;
+} {
+  return { selectedLogMode: nextLogMode, saveError: null };
+}
+
 export default function GuildSettingsPage() {
   const meQuery = trpc.dashboardAccess.me.useQuery();
-  const canManageLoggingSettings = meQuery.isLoading
-    ? undefined
-    : hasCapabilityFromWireString(meQuery.data?.capabilities, CAP.MANAGE_LOGGING_SETTINGS);
+  // isLoadingはクエリがエラーで終わった場合もfalseになるため、エラー時は
+  // canManageLoggingSettingsをundefinedのままにし、no-permissionと誤判定しない。
+  const canManageLoggingSettings =
+    meQuery.isLoading || meQuery.isError
+      ? undefined
+      : hasCapabilityFromWireString(meQuery.data?.capabilities, CAP.MANAGE_LOGGING_SETTINGS);
 
   const [selectedLogMode, setSelectedLogMode] = useState<GuildLogMode | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -66,11 +90,30 @@ export default function GuildSettingsPage() {
 
   const state = deriveSettingsPageState({
     canManageLoggingSettings,
+    permissionCheckError: meQuery.error ? { message: meQuery.error.message } : null,
+    permissionCheckIsFetching: meQuery.isFetching,
     query,
     selectedLogMode,
     isSaving: mutation.isPending,
     saveError
   });
+
+  function handleLogModeChange(nextLogMode: GuildLogMode) {
+    const update = nextLogModeSelection(nextLogMode);
+    setSelectedLogMode(update.selectedLogMode);
+    setSaveError(update.saveError);
+  }
+
+  function handleRetry() {
+    // エラーの原因が権限確認クエリ(meQuery)自体にある場合、まだ有効化されていない
+    // (enabled: false の)ログ設定クエリまで手動refetchすると無関係なリクエストが
+    // 発生してしまうため、原因のクエリだけを再試行する。
+    if (meQuery.isError) {
+      void meQuery.refetch();
+      return;
+    }
+    void query.refetch();
+  }
 
   function handleSave() {
     if (state.kind !== "loaded") return;
@@ -98,9 +141,9 @@ export default function GuildSettingsPage() {
   return (
     <SettingsPageView
       state={state}
-      onLogModeChange={setSelectedLogMode}
+      onLogModeChange={handleLogModeChange}
       onSave={handleSave}
-      onRetry={() => query.refetch()}
+      onRetry={handleRetry}
     />
   );
 }
