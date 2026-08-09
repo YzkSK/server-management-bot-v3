@@ -10,7 +10,6 @@ describe("deriveSettingsPageState", () => {
       deriveSettingsPageState({
         canManageLoggingSettings: undefined,
         query: NOT_FETCHED,
-        confirmedLogMode: null,
         selectedLogMode: null,
         isSaving: false,
         saveError: null
@@ -23,7 +22,6 @@ describe("deriveSettingsPageState", () => {
       deriveSettingsPageState({
         canManageLoggingSettings: false,
         query: NOT_FETCHED,
-        confirmedLogMode: null,
         selectedLogMode: null,
         isSaving: false,
         saveError: null
@@ -36,7 +34,6 @@ describe("deriveSettingsPageState", () => {
       deriveSettingsPageState({
         canManageLoggingSettings: false,
         query: { data: undefined, error: null, isFetching: true },
-        confirmedLogMode: null,
         selectedLogMode: null,
         isSaving: false,
         saveError: null
@@ -49,7 +46,6 @@ describe("deriveSettingsPageState", () => {
       deriveSettingsPageState({
         canManageLoggingSettings: true,
         query: NOT_FETCHED,
-        confirmedLogMode: null,
         selectedLogMode: null,
         isSaving: false,
         saveError: null
@@ -62,7 +58,6 @@ describe("deriveSettingsPageState", () => {
       deriveSettingsPageState({
         canManageLoggingSettings: true,
         query: { data: undefined, error: { message: "boom" }, isFetching: false },
-        confirmedLogMode: null,
         selectedLogMode: null,
         isSaving: false,
         saveError: null
@@ -75,7 +70,6 @@ describe("deriveSettingsPageState", () => {
       deriveSettingsPageState({
         canManageLoggingSettings: true,
         query: { data: undefined, error: { message: "boom" }, isFetching: true },
-        confirmedLogMode: null,
         selectedLogMode: null,
         isSaving: false,
         saveError: null
@@ -88,7 +82,6 @@ describe("deriveSettingsPageState", () => {
       deriveSettingsPageState({
         canManageLoggingSettings: true,
         query: { data: { logMode: "metadata_only" }, error: null, isFetching: false },
-        confirmedLogMode: null,
         selectedLogMode: null,
         isSaving: false,
         saveError: null
@@ -107,7 +100,6 @@ describe("deriveSettingsPageState", () => {
       deriveSettingsPageState({
         canManageLoggingSettings: true,
         query: { data: { logMode: "full" }, error: null, isFetching: false },
-        confirmedLogMode: null,
         selectedLogMode: "disabled",
         isSaving: true,
         saveError: null
@@ -126,7 +118,6 @@ describe("deriveSettingsPageState", () => {
       deriveSettingsPageState({
         canManageLoggingSettings: true,
         query: { data: { logMode: "full" }, error: null, isFetching: false },
-        confirmedLogMode: null,
         selectedLogMode: "disabled",
         isSaving: false,
         saveError: "保存に失敗しました。"
@@ -140,15 +131,14 @@ describe("deriveSettingsPageState", () => {
     });
   });
 
-  test("uses confirmedLogMode over stale query.data when a post-save refetch has failed", () => {
-    // ユーザーがfull->disabledに保存し、setLogModeは成功したが、その後のrefetch()が
-    // 失敗してquery.dataがfullのまま古くなっているケース。confirmedLogModeが優先され、
-    // 画面には保存済みのdisabledが反映されるべき(isDirtyもfalseになる)。
+  test("reflects the value written directly into the query cache immediately after a save", () => {
+    // page.tsxのonSuccessはutils.logs.getLogMode.setData()でクエリキャッシュ自体を
+    // 更新するため、以降query.dataは直ちに保存済みの値を返す。バックグラウンドの
+    // refetch()が失敗しても、この時点でquery.dataはすでに新しい値になっている。
     expect(
       deriveSettingsPageState({
         canManageLoggingSettings: true,
-        query: { data: { logMode: "full" }, error: { message: "refetch failed" }, isFetching: false },
-        confirmedLogMode: "disabled",
+        query: { data: { logMode: "disabled" }, error: null, isFetching: false },
         selectedLogMode: null,
         isSaving: false,
         saveError: null
@@ -157,6 +147,37 @@ describe("deriveSettingsPageState", () => {
       kind: "loaded",
       logMode: "disabled",
       selectedLogMode: "disabled",
+      isSaving: false,
+      saveError: null
+    });
+  });
+
+  test("picks up a later genuine server-side change instead of staying pinned to a previously saved value", () => {
+    // シナリオ: 直前のテストと同じセッションで、保存によりquery.dataがdisabledになった後、
+    // 別の管理者がさらにfullへ変更し、バックグラウンドのrefetchでquery.dataがfullに更新された。
+    // deriveSettingsPageStateは保存結果を覚えておく別状態(confirmedLogModeのような
+    // シャドー状態)を一切持たず、常にquery.dataをそのまま権威あるソースとして使うため、
+    // 新しいfullがそのまま反映されるべき(disabledに固定されたままにならない)。
+    const afterSave = deriveSettingsPageState({
+      canManageLoggingSettings: true,
+      query: { data: { logMode: "disabled" }, error: null, isFetching: false },
+      selectedLogMode: null,
+      isSaving: false,
+      saveError: null
+    });
+    expect(afterSave.kind === "loaded" && afterSave.logMode).toBe("disabled");
+
+    const afterLaterServerSideChange = deriveSettingsPageState({
+      canManageLoggingSettings: true,
+      query: { data: { logMode: "full" }, error: null, isFetching: false },
+      selectedLogMode: null,
+      isSaving: false,
+      saveError: null
+    });
+    expect(afterLaterServerSideChange).toEqual({
+      kind: "loaded",
+      logMode: "full",
+      selectedLogMode: "full",
       isSaving: false,
       saveError: null
     });

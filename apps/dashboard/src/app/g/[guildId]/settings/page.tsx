@@ -20,9 +20,6 @@ export function deriveSettingsPageState(input: {
   // "no-permission" / 通常フローへ分岐する。
   canManageLoggingSettings: boolean | undefined;
   query: LogModeQueryResult;
-  // 直近の保存成功で確定したlogMode。setLogModeのレスポンスから設定され、
-  // 保存後のrefetchが失敗してquery.dataが古いままでもUIが正しい値を表示できるようにする。
-  confirmedLogMode: GuildLogMode | null;
   selectedLogMode: GuildLogMode | null;
   isSaving: boolean;
   saveError: string | null;
@@ -35,13 +32,11 @@ export function deriveSettingsPageState(input: {
     return { kind: "no-permission" };
   }
 
-  const logMode = input.confirmedLogMode ?? input.query.data?.logMode;
-
-  if (logMode !== undefined) {
+  if (input.query.data) {
     return {
       kind: "loaded",
-      logMode,
-      selectedLogMode: input.selectedLogMode ?? logMode,
+      logMode: input.query.data.logMode,
+      selectedLogMode: input.selectedLogMode ?? input.query.data.logMode,
       isSaving: input.isSaving,
       saveError: input.saveError
     };
@@ -61,9 +56,9 @@ export default function GuildSettingsPage() {
     : hasCapabilityFromWireString(meQuery.data?.capabilities, CAP.MANAGE_LOGGING_SETTINGS);
 
   const [selectedLogMode, setSelectedLogMode] = useState<GuildLogMode | null>(null);
-  const [confirmedLogMode, setConfirmedLogMode] = useState<GuildLogMode | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const utils = trpc.useUtils();
   const query = trpc.logs.getLogMode.useQuery(undefined, {
     enabled: canManageLoggingSettings === true
   });
@@ -72,7 +67,6 @@ export default function GuildSettingsPage() {
   const state = deriveSettingsPageState({
     canManageLoggingSettings,
     query,
-    confirmedLogMode,
     selectedLogMode,
     isSaving: mutation.isPending,
     saveError
@@ -86,9 +80,13 @@ export default function GuildSettingsPage() {
       { logMode: requestedLogMode },
       {
         onSuccess: (result) => {
-          // ミューテーションのレスポンスを確定値として即座に反映する。
-          // refetch()が失敗しても、保存成功自体はUIに正しく反映され続ける。
-          setConfirmedLogMode(result.logMode);
+          // ミューテーションのレスポンスでクエリキャッシュ自体を直接更新する。
+          // query.dataが即座に権威ある最新値になるため、refetch()が失敗しても
+          // 保存結果はUIに残り続け、かつ後で本当にサーバー側の値が変わった
+          // (別の管理者が変更した等)場合もその後のrefetchで自然に追従できる
+          // (confirmedLogModeのような別状態を持たないため、古い値がUIに
+          // 永続的に居座ることがない)。
+          utils.logs.getLogMode.setData(undefined, { logMode: result.logMode });
           setSelectedLogMode((current) => (current === requestedLogMode ? null : current));
           void query.refetch();
         },
