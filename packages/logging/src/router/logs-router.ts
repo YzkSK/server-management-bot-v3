@@ -9,8 +9,12 @@ import {
 } from "@sm-bot/shared";
 import { requireCapability, router } from "@sm-bot/dashboard-access";
 import {
+  getGuildLogMode as getGuildLogModeDefault,
+  guildLogModes,
   listLogEvents as listLogEventsDefault,
+  setGuildLogMode as setGuildLogModeDefault,
   type DbClient,
+  type GuildLogMode,
   type LogEventRow
 } from "@sm-bot/db";
 
@@ -57,10 +61,14 @@ function toLogEntryDto(row: LogEventRow, includePayload: boolean): LogEntryDto {
 export interface CreateLogsRouterDeps {
   getDb: () => DbClient;
   listLogEvents?: typeof listLogEventsDefault;
+  getGuildLogMode?: typeof getGuildLogModeDefault;
+  setGuildLogMode?: typeof setGuildLogModeDefault;
 }
 
 export function createLogsRouter(deps: CreateLogsRouterDeps) {
   const listLogEventsImpl = deps.listLogEvents ?? listLogEventsDefault;
+  const getGuildLogModeImpl = deps.getGuildLogMode ?? getGuildLogModeDefault;
+  const setGuildLogModeImpl = deps.setGuildLogMode ?? setGuildLogModeDefault;
 
   return router({
     list: requireCapability(CAP.VIEW_LOGS)
@@ -107,6 +115,32 @@ export function createLogsRouter(deps: CreateLogsRouterDeps) {
         };
 
         return result;
+      }),
+
+    getLogMode: requireCapability(CAP.MANAGE_LOGGING_SETTINGS).query(async ({ ctx }) => {
+      if (!ctx.guildId) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "guildId missing after capability check"
+        });
+      }
+
+      const logMode = await getGuildLogModeImpl(deps.getDb(), ctx.guildId);
+      return { logMode };
+    }),
+
+    setLogMode: requireCapability(CAP.MANAGE_LOGGING_SETTINGS)
+      .input(z.object({ logMode: z.enum(guildLogModes) }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.guildId) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "guildId missing after capability check"
+          });
+        }
+
+        const config = await setGuildLogModeImpl(deps.getDb(), ctx.guildId, input.logMode);
+        return { logMode: config.logMode };
       })
   });
 }

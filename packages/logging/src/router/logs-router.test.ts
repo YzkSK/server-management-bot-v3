@@ -5,7 +5,7 @@ import { TRPCError } from "@trpc/server";
 
 import { CAP, type LogCategory } from "@sm-bot/shared";
 import type { DashboardAccessContext } from "@sm-bot/dashboard-access";
-import type { DbClient } from "@sm-bot/db";
+import type { DbClient, GuildLogMode } from "@sm-bot/db";
 
 import { createLogsRouter } from "./logs-router.js";
 
@@ -158,5 +158,81 @@ describe("logsRouter.list", () => {
     assert.ok(capturedBefore, "before should be defined");
     assert.deepEqual(capturedBefore!.receivedAt, new Date("2026-01-02T00:00:00.000Z"));
     assert.equal(capturedBefore!.id, "550e8400-e29b-41d4-a716-446655440000");
+  });
+});
+
+describe("logsRouter.getLogMode", () => {
+  it("rejects a caller without MANAGE_LOGGING_SETTINGS", async () => {
+    const caller = createLogsRouter({
+      getDb: () => FAKE_DB,
+      getGuildLogMode: async () => "full"
+    }).createCaller(context({ capabilities: 0n }));
+
+    await assert.rejects(
+      () => caller.getLogMode(),
+      (error) => {
+        assert.ok(error instanceof TRPCError);
+        assert.equal(error.code, "FORBIDDEN");
+        return true;
+      }
+    );
+  });
+
+  it("returns the guild's current log mode", async () => {
+    let capturedGuildId: string | undefined;
+    const caller = createLogsRouter({
+      getDb: () => FAKE_DB,
+      getGuildLogMode: async (_db, guildId) => {
+        capturedGuildId = guildId;
+        return "metadata_only";
+      }
+    }).createCaller(context({ capabilities: CAP.MANAGE_LOGGING_SETTINGS }));
+
+    const result = await caller.getLogMode();
+
+    assert.deepEqual(result, { logMode: "metadata_only" });
+    assert.equal(capturedGuildId, "guild-1");
+  });
+});
+
+describe("logsRouter.setLogMode", () => {
+  it("rejects a caller without MANAGE_LOGGING_SETTINGS", async () => {
+    const caller = createLogsRouter({
+      getDb: () => FAKE_DB,
+      setGuildLogMode: async (_db, _guildId, logMode) => ({ logMode }) as never
+    }).createCaller(context({ capabilities: 0n }));
+
+    await assert.rejects(
+      () => caller.setLogMode({ logMode: "disabled" }),
+      (error) => {
+        assert.ok(error instanceof TRPCError);
+        assert.equal(error.code, "FORBIDDEN");
+        return true;
+      }
+    );
+  });
+
+  it("rejects an unknown log mode value", async () => {
+    const caller = createLogsRouter({ getDb: () => FAKE_DB }).createCaller(
+      context({ capabilities: CAP.MANAGE_LOGGING_SETTINGS })
+    );
+
+    await assert.rejects(() => caller.setLogMode({ logMode: "bogus" as never }));
+  });
+
+  it("persists the new log mode for the caller's guild and returns it", async () => {
+    let captured: { guildId?: string; logMode?: GuildLogMode } = {};
+    const caller = createLogsRouter({
+      getDb: () => FAKE_DB,
+      setGuildLogMode: async (_db, guildId, logMode) => {
+        captured = { guildId, logMode };
+        return { logMode } as never;
+      }
+    }).createCaller(context({ capabilities: CAP.MANAGE_LOGGING_SETTINGS }));
+
+    const result = await caller.setLogMode({ logMode: "disabled" });
+
+    assert.deepEqual(result, { logMode: "disabled" });
+    assert.deepEqual(captured, { guildId: "guild-1", logMode: "disabled" });
   });
 });
