@@ -41,7 +41,9 @@ export function GuildShell({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem disabled>サーバー設定</DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={`/g/${guildId}/settings`}>サーバー設定</Link>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/g">サーバーを切り替える</Link>
