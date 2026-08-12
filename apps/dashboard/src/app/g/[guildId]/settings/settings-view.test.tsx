@@ -9,6 +9,15 @@ function noop() {}
 
 const locale = getLocale("ja");
 
+// Extracts just one radiogroup's HTML slice so "checked" assertions can be
+// scoped per section instead of counted globally across the whole page.
+function radiogroupHtml(html: string, ariaLabel: string) {
+  const start = html.indexOf(`aria-label="${ariaLabel}"`);
+  expect(start).toBeGreaterThan(-1);
+  const end = html.indexOf("</div>", start);
+  return html.slice(start, end);
+}
+
 function render(state: SettingsPageState) {
   return renderToString(
     <SettingsPageView
@@ -76,6 +85,10 @@ describe("SettingsPageView", () => {
     expect(html).toContain("本文を含めて記録");
     expect(html).toContain("本文を除いて記録");
     expect(html).toContain("記録しない");
+
+    const group = radiogroupHtml(html, locale.settings.logModeHeading);
+    expect(group.match(/checked=""/g)?.length).toBe(1);
+    expect(group).toContain('checked="" value="metadata_only"');
   });
 
   test("disables the log mode save button when the selection matches the saved value", () => {
@@ -109,6 +122,10 @@ describe("SettingsPageView", () => {
 
     expect(html).toContain("日本語");
     expect(html).toContain("English");
+
+    const group = radiogroupHtml(html, locale.settings.languageHeading);
+    expect(group.match(/checked=""/g)?.length).toBe(1);
+    expect(group).toContain('checked="" value="ja"');
   });
 
   test("shows the language save error message when present", () => {
