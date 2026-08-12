@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { getGuildLogMode, isGuildLogMode, setGuildLogMode } from "./guild-configs.js";
+import {
+  getGuildLanguage,
+  getGuildLogMode,
+  isGuildLogMode,
+  setGuildLanguage,
+  setGuildLogMode
+} from "./guild-configs.js";
 
 function createFakeDb(initialRows: Array<Record<string, unknown>> = []) {
   const rows = [...initialRows];
@@ -15,7 +21,7 @@ function createFakeDb(initialRows: Array<Record<string, unknown>> = []) {
             // このフェイクは1テストにつき単一guildIdのシード行のみを扱う想定のため、
             // dashboard-access.test.tsの慣習にならいwhereの条件式自体は評価しない。
             where: () => ({
-              limit: async () => rows.map((row) => ({ logMode: row.logMode }))
+              limit: async () => rows.map((row) => ({ ...row }))
             })
           };
         }
@@ -92,5 +98,43 @@ describe("setGuildLogMode", () => {
 
     assert.equal(db.rows.length, 1);
     assert.equal(db.rows[0]?.logMode, "metadata_only");
+  });
+});
+
+describe("getGuildLanguage", () => {
+  it("returns the configured language for the guild", async () => {
+    const db = createFakeDb([{ guildId: "guild-1", language: "en" }]);
+
+    const language = await getGuildLanguage(db, "guild-1");
+
+    assert.equal(language, "en");
+  });
+
+  it("defaults to ja when the guild has no config row yet", async () => {
+    const db = createFakeDb();
+
+    const language = await getGuildLanguage(db, "guild-without-config");
+
+    assert.equal(language, "ja");
+  });
+});
+
+describe("setGuildLanguage", () => {
+  it("creates a config row when none exists", async () => {
+    const db = createFakeDb();
+
+    const config = await setGuildLanguage(db, "guild-1", "en");
+
+    assert.equal(config.language, "en");
+    assert.equal(db.rows.length, 1);
+  });
+
+  it("updates the existing config row instead of creating a duplicate", async () => {
+    const db = createFakeDb([{ guildId: "guild-1", language: "ja" }]);
+
+    await setGuildLanguage(db, "guild-1", "en");
+
+    assert.equal(db.rows.length, 1);
+    assert.equal(db.rows[0]?.language, "en");
   });
 });
