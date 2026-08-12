@@ -1,15 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { renderToString } from "react-dom/server";
 
+import { getLocale } from "@sm-bot/shared";
+
 import { LogsPageView, type LogEntryData, type LogsPageState } from "./logs-view";
 
 function noop() {}
+
+const locale = getLocale("ja");
 
 describe("LogsPageView", () => {
   test("renders a tab per log category", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loading" }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -36,6 +41,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loading" }}
+        locale={locale}
         category="member"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -60,6 +66,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loading" }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -81,6 +88,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "error", message: "boom", isRetrying: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -103,6 +111,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "error", message: "boom", isRetrying: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -125,6 +134,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "error", message: "boom", isRetrying: true }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -147,6 +157,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -168,6 +179,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={true}
@@ -203,6 +215,7 @@ describe("LogsPageView", () => {
     const rawHtml = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries, hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={true}
@@ -227,6 +240,7 @@ describe("LogsPageView", () => {
           hasNextPage: false,
           isFetchingNextPage: false
         }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={true}
@@ -261,6 +275,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries, hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -283,6 +298,7 @@ describe("LogsPageView", () => {
     const withMore = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries: [], hasNextPage: true, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -301,6 +317,7 @@ describe("LogsPageView", () => {
     const withoutMore = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -321,6 +338,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loading" }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -342,6 +360,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -363,6 +382,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -385,6 +405,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -416,6 +437,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -442,6 +464,7 @@ describe("LogsPageView", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
         category="all"
         onCategoryChange={noop}
         canViewRaw={false}
@@ -460,5 +483,27 @@ describe("LogsPageView", () => {
 
     expect(html).toContain("2件の新着");
     expect(resumed).toBe(false);
+  });
+
+  test("renders the English error message when given the English locale", () => {
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "error", message: "boom", isRetrying: false }}
+        locale={getLocale("en")}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+
+    expect(html).toContain("Failed to load logs.");
   });
 });

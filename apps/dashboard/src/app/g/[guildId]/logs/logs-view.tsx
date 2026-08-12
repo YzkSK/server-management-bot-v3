@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { LOG_CATEGORIES, type LogCategory } from "@sm-bot/shared";
+import { LOG_CATEGORIES, type LogCategory, type Locale } from "@sm-bot/shared";
 
 import { Button } from "../../../../components/ui/button";
 import { ScrollArea } from "../../../../components/ui/scroll-area";
@@ -59,6 +59,7 @@ const CATEGORY_LABELS: Record<LogCategory, string> = {
 
 export function LogsPageView({
   state,
+  locale,
   category,
   onCategoryChange,
   canViewRaw,
@@ -72,6 +73,7 @@ export function LogsPageView({
   onScrollAwayFromTop
 }: {
   state: LogsPageState;
+  locale: Locale;
   category: LogCategory;
   onCategoryChange: (category: LogCategory) => void;
   canViewRaw: boolean;
@@ -153,10 +155,10 @@ export function LogsPageView({
       {state.kind === "loading" ? <p className="text-sm text-muted-foreground">Loading...</p> : null}
       {state.kind === "error" ? (
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-destructive">ログの取得に失敗しました。</p>
+          <p className="text-sm text-destructive">{locale.logs.loadFailed}</p>
           <div>
             <Button type="button" variant="outline" size="sm" onClick={onRetry} disabled={state.isRetrying}>
-              {state.isRetrying ? "再試行中…" : "再試行"}
+              {state.isRetrying ? locale.logs.retrying : locale.logs.retry}
             </Button>
           </div>
         </div>
@@ -166,7 +168,7 @@ export function LogsPageView({
           {pendingCount > 0 ? (
             <div className="flex justify-center">
               <Button type="button" variant="secondary" size="sm" onClick={handleResumeAutoScroll}>
-                {`${pendingCount}件の新着 ↑`}
+                {locale.logs.newLogsCount({ count: pendingCount })}
               </Button>
             </div>
           ) : null}
