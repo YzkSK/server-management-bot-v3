@@ -8,10 +8,10 @@
   },
   "scripts": {
     "build": "next build",
-    "predev": "bun run --filter '@sm-bot/config' --filter '@sm-bot/dashboard-access' --filter '@sm-bot/db' --filter '@sm-bot/logging' --filter '@sm-bot/shared' build",
+    "predev": "bun run --filter '@sm-bot/config' --filter '@sm-bot/dashboard-access' --filter '@sm-bot/db' --filter '@sm-bot/guild-settings' --filter '@sm-bot/logging' --filter '@sm-bot/shared' build",
     "dev": "node --experimental-strip-types src/server.ts",
     "lint": "next typegen && tsc -p tsconfig.json --noEmit",
-    "prestart": "bun run --filter '@sm-bot/config' --filter '@sm-bot/dashboard-access' --filter '@sm-bot/db' --filter '@sm-bot/logging' --filter '@sm-bot/shared' build",
+    "prestart": "bun run --filter '@sm-bot/config' --filter '@sm-bot/dashboard-access' --filter '@sm-bot/db' --filter '@sm-bot/guild-settings' --filter '@sm-bot/logging' --filter '@sm-bot/shared' build",
     "start": "NODE_ENV=production node --experimental-strip-types src/server.ts",
     "test": "bun test src",
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit"
@@ -21,6 +21,7 @@
     "@sm-bot/config": "workspace:*",
     "@sm-bot/dashboard-access": "workspace:*",
     "@sm-bot/db": "workspace:*",
+    "@sm-bot/guild-settings": "workspace:*",
     "@sm-bot/logging": "workspace:*",
     "@sm-bot/shared": "workspace:*",
     "@tanstack/react-query": "^5.80.3",
