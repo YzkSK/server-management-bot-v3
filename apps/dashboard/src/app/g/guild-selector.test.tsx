@@ -1,24 +1,29 @@
+import { getLocale } from "@sm-bot/shared";
 import { describe, expect, test } from "bun:test";
 import { renderToString } from "react-dom/server";
 
-import { GuildSelectorView, type GuildSelectorState } from "./guild-selector";
+import { detectBrowserLanguage, GuildSelectorView, type GuildSelectorState } from "./guild-selector";
 
 describe("GuildSelectorView", () => {
   test("renders Loading... while loading", () => {
-    const html = renderToString(<GuildSelectorView state={{ kind: "loading" }} />);
+    const html = renderToString(
+      <GuildSelectorView state={{ kind: "loading" }} locale={getLocale("ja")} />
+    );
     expect(html).toContain("Loading...");
   });
 
   test("renders a generic error message on failure without leaking the raw error", () => {
     const html = renderToString(
-      <GuildSelectorView state={{ kind: "error", message: "boom" }} />
+      <GuildSelectorView state={{ kind: "error", message: "boom" }} locale={getLocale("ja")} />
     );
     expect(html).toContain("ギルド一覧の取得に失敗しました。");
     expect(html).not.toContain("boom");
   });
 
   test("renders a message when there are no accessible guilds", () => {
-    const html = renderToString(<GuildSelectorView state={{ kind: "loaded", guilds: [] }} />);
+    const html = renderToString(
+      <GuildSelectorView state={{ kind: "loaded", guilds: [] }} locale={getLocale("ja")} />
+    );
     expect(html).toContain("No accessible guilds found.");
   });
 
@@ -30,10 +35,32 @@ describe("GuildSelectorView", () => {
         { id: "guild-2", name: "Guild Two" }
       ]
     };
-    const html = renderToString(<GuildSelectorView state={state} />);
+    const html = renderToString(<GuildSelectorView state={state} locale={getLocale("ja")} />);
     expect(html).toContain("Guild One");
     expect(html).toContain("href=\"/g/guild-1\"");
     expect(html).toContain("Guild Two");
     expect(html).toContain("href=\"/g/guild-2\"");
+  });
+});
+
+describe("detectBrowserLanguage", () => {
+  test("returns ja for Japanese browser locales", () => {
+    expect(detectBrowserLanguage("ja")).toBe("ja");
+    expect(detectBrowserLanguage("ja-JP")).toBe("ja");
+  });
+
+  test("returns en for English and other non-Japanese browser locales", () => {
+    expect(detectBrowserLanguage("en-US")).toBe("en");
+    expect(detectBrowserLanguage("fr-FR")).toBe("en");
+    expect(detectBrowserLanguage("")).toBe("en");
+  });
+});
+
+describe("GuildSelectorView with the English locale", () => {
+  test("renders the English error message", () => {
+    const html = renderToString(
+      <GuildSelectorView state={{ kind: "error", message: "boom" }} locale={getLocale("en")} />
+    );
+    expect(html).toContain("Failed to load the guild list.");
   });
 });
