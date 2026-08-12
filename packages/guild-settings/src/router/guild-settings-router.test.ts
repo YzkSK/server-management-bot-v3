@@ -23,20 +23,20 @@ function context(overrides: Partial<DashboardAccessContext> = {}): DashboardAcce
 const FAKE_DB = {} as DbClient;
 
 describe("guildSettingsRouter.getLanguage", () => {
-  it("rejects a caller without MANAGE_GUILD_SETTINGS", async () => {
+  it("succeeds for a caller with no capabilities, as long as guildId matches", async () => {
+    let capturedGuildId: string | undefined;
     const caller = createGuildSettingsRouter({
       getDb: () => FAKE_DB,
-      getGuildLanguage: async () => "ja"
+      getGuildLanguage: async (_db, guildId) => {
+        capturedGuildId = guildId;
+        return "ja";
+      }
     }).createCaller(context({ capabilities: 0n }));
 
-    await assert.rejects(
-      () => caller.getLanguage({ guildId: "guild-1" }),
-      (error) => {
-        assert.ok(error instanceof TRPCError);
-        assert.equal(error.code, "FORBIDDEN");
-        return true;
-      }
-    );
+    const result = await caller.getLanguage({ guildId: "guild-1" });
+
+    assert.deepEqual(result, { language: "ja" });
+    assert.equal(capturedGuildId, "guild-1");
   });
 
   it("returns the guild's current language", async () => {
