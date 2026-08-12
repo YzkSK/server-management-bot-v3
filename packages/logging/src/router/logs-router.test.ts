@@ -39,7 +39,7 @@ describe("logsRouter.list", () => {
     const caller = router(async () => []).createCaller(context({ capabilities: 0n }));
 
     await assert.rejects(
-      () => caller.list({ category: "all" }),
+      () => caller.list({ guildId: "guild-1", category: "all" }),
       (error) => {
         assert.ok(error instanceof TRPCError);
         assert.equal(error.code, "FORBIDDEN");
@@ -64,7 +64,7 @@ describe("logsRouter.list", () => {
       }
     ]).createCaller(context({ capabilities: CAP.VIEW_LOGS }));
 
-    const result = await caller.list({ category: "all" });
+    const result = await caller.list({ guildId: "guild-1", category: "all" });
 
     assert.equal(result.items.length, 1);
     assert.equal(result.items[0]?.payload, null);
@@ -86,7 +86,7 @@ describe("logsRouter.list", () => {
       }
     ]).createCaller(context({ capabilities: CAP.VIEW_LOGS | CAP.VIEW_LOGS_RAW }));
 
-    const result = await caller.list({ category: "all" });
+    const result = await caller.list({ guildId: "guild-1", category: "all" });
 
     assert.deepEqual(result.items[0]?.payload, { secret: "value" });
   });
@@ -98,7 +98,7 @@ describe("logsRouter.list", () => {
       return [];
     }).createCaller(context({ capabilities: CAP.VIEW_LOGS }));
 
-    await caller.list({ category: "message" satisfies LogCategory });
+    await caller.list({ guildId: "guild-1", category: "message" satisfies LogCategory });
 
     assert.deepEqual(capturedPrefixes, ["message."]);
   });
@@ -122,7 +122,7 @@ describe("logsRouter.list", () => {
       return rows;
     }).createCaller(context({ capabilities: CAP.VIEW_LOGS }));
 
-    const result = await caller.list({ category: "all", limit: 2 });
+    const result = await caller.list({ guildId: "guild-1", category: "all", limit: 2 });
 
     assert.equal(capturedLimit, 3);
     assert.equal(result.items.length, 2);
@@ -135,7 +135,7 @@ describe("logsRouter.list", () => {
   it("returns a null nextCursor when there is no more data", async () => {
     const caller = router(async () => []).createCaller(context({ capabilities: CAP.VIEW_LOGS }));
 
-    const result = await caller.list({ category: "all" });
+    const result = await caller.list({ guildId: "guild-1", category: "all" });
 
     assert.equal(result.nextCursor, null);
   });
@@ -148,6 +148,7 @@ describe("logsRouter.list", () => {
     }).createCaller(context({ capabilities: CAP.VIEW_LOGS }));
 
     await caller.list({
+      guildId: "guild-1",
       category: "all",
       cursor: {
         receivedAt: "2026-01-02T00:00:00.000Z",
@@ -159,6 +160,20 @@ describe("logsRouter.list", () => {
     assert.deepEqual(capturedBefore!.receivedAt, new Date("2026-01-02T00:00:00.000Z"));
     assert.equal(capturedBefore!.id, "550e8400-e29b-41d4-a716-446655440000");
   });
+
+  it("rejects when input.guildId doesn't match the caller's authorized guild", async () => {
+    const caller = router(async () => [])
+      .createCaller(context({ guildId: "guild-1", capabilities: CAP.VIEW_LOGS }));
+
+    await assert.rejects(
+      () => caller.list({ guildId: "guild-2", category: "all" }),
+      (error) => {
+        assert.ok(error instanceof TRPCError);
+        assert.equal(error.code, "FORBIDDEN");
+        return true;
+      }
+    );
+  });
 });
 
 describe("logsRouter.getLogMode", () => {
@@ -169,7 +184,7 @@ describe("logsRouter.getLogMode", () => {
     }).createCaller(context({ capabilities: 0n }));
 
     await assert.rejects(
-      () => caller.getLogMode(),
+      () => caller.getLogMode({ guildId: "guild-1" }),
       (error) => {
         assert.ok(error instanceof TRPCError);
         assert.equal(error.code, "FORBIDDEN");
@@ -188,10 +203,26 @@ describe("logsRouter.getLogMode", () => {
       }
     }).createCaller(context({ capabilities: CAP.MANAGE_LOGGING_SETTINGS }));
 
-    const result = await caller.getLogMode();
+    const result = await caller.getLogMode({ guildId: "guild-1" });
 
     assert.deepEqual(result, { logMode: "metadata_only" });
     assert.equal(capturedGuildId, "guild-1");
+  });
+
+  it("rejects when input.guildId doesn't match the caller's authorized guild", async () => {
+    const caller = createLogsRouter({
+      getDb: () => FAKE_DB,
+      getGuildLogMode: async () => "full"
+    }).createCaller(context({ guildId: "guild-1", capabilities: CAP.MANAGE_LOGGING_SETTINGS }));
+
+    await assert.rejects(
+      () => caller.getLogMode({ guildId: "guild-2" }),
+      (error) => {
+        assert.ok(error instanceof TRPCError);
+        assert.equal(error.code, "FORBIDDEN");
+        return true;
+      }
+    );
   });
 });
 

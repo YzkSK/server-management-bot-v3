@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 
 import { CAP } from "@sm-bot/shared";
 import type { GuildLogMode } from "@sm-bot/db";
@@ -71,7 +72,8 @@ export function nextLogModeSelection(nextLogMode: GuildLogMode): {
 }
 
 export default function GuildSettingsPage() {
-  const meQuery = trpc.dashboardAccess.me.useQuery();
+  const { guildId } = useParams<{ guildId: string }>();
+  const meQuery = trpc.dashboardAccess.me.useQuery({ guildId });
   // isLoadingはクエリがエラーで終わった場合もfalseになるため、エラー時は
   // canManageLoggingSettingsをundefinedのままにし、no-permissionと誤判定しない。
   const canManageLoggingSettings =
@@ -83,9 +85,10 @@ export default function GuildSettingsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
-  const query = trpc.logs.getLogMode.useQuery(undefined, {
-    enabled: canManageLoggingSettings === true
-  });
+  const query = trpc.logs.getLogMode.useQuery(
+    { guildId },
+    { enabled: canManageLoggingSettings === true }
+  );
   const mutation = trpc.logs.setLogMode.useMutation();
 
   const state = deriveSettingsPageState({
@@ -129,7 +132,7 @@ export default function GuildSettingsPage() {
           // (別の管理者が変更した等)場合もその後のrefetchで自然に追従できる
           // (confirmedLogModeのような別状態を持たないため、古い値がUIに
           // 永続的に居座ることがない)。
-          utils.logs.getLogMode.setData(undefined, { logMode: result.logMode });
+          utils.logs.getLogMode.setData({ guildId }, { logMode: result.logMode });
           setSelectedLogMode((current) => (current === requestedLogMode ? null : current));
           void query.refetch();
         },

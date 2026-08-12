@@ -67,7 +67,7 @@ export default function GuildLogsPage() {
   const realtime = useRealtimeLogs(guildId, category);
 
   const query = trpc.logs.list.useInfiniteQuery(
-    { category, limit: 50 },
+    { guildId, category, limit: 50 },
     { getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined }
   );
 

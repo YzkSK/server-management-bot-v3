@@ -24,6 +24,7 @@ const cursorSchema = z.object({
 });
 
 const listLogsInput = z.object({
+  guildId: z.string().min(1),
   category: z.enum(LOG_CATEGORIES),
   cursor: cursorSchema.optional(),
   limit: z.number().int().min(1).max(100).default(50)
@@ -84,6 +85,10 @@ export function createLogsRouter(deps: CreateLogsRouterDeps) {
           });
         }
 
+        if (input.guildId !== ctx.guildId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
         const canViewRaw = hasCapability(ctx.capabilities, CAP.VIEW_LOGS_RAW);
         const eventNamePrefixes = eventNamePrefixesForCategory(input.category);
 
@@ -117,17 +122,23 @@ export function createLogsRouter(deps: CreateLogsRouterDeps) {
         return result;
       }),
 
-    getLogMode: requireCapability(CAP.MANAGE_LOGGING_SETTINGS).query(async ({ ctx }) => {
-      if (!ctx.guildId) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "guildId missing after capability check"
-        });
-      }
+    getLogMode: requireCapability(CAP.MANAGE_LOGGING_SETTINGS)
+      .input(z.object({ guildId: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.guildId) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "guildId missing after capability check"
+          });
+        }
 
-      const logMode = await getGuildLogModeImpl(deps.getDb(), ctx.guildId);
-      return { logMode };
-    }),
+        if (input.guildId !== ctx.guildId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        const logMode = await getGuildLogModeImpl(deps.getDb(), ctx.guildId);
+        return { logMode };
+      }),
 
     setLogMode: requireCapability(CAP.MANAGE_LOGGING_SETTINGS)
       .input(z.object({ logMode: z.enum(guildLogModes) }))
