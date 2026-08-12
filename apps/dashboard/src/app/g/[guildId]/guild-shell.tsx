@@ -4,6 +4,8 @@ import { ChevronDownIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { getLocale, type Locale } from "@sm-bot/shared";
+
 import { Button } from "../../../components/ui/button";
 import {
   DropdownMenu,
@@ -12,6 +14,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "../../../components/ui/dropdown-menu";
+import { LocaleProvider } from "../../../lib/locale-context";
+import { trpc } from "../../../trpc-client";
 
 interface NavItem {
   label: string;
@@ -21,13 +25,15 @@ interface NavItem {
 // 将来ページを追加するときはここに1行足すだけでナビに反映される。
 const NAV_ITEMS: NavItem[] = [{ label: "Logs", hrefSuffix: "/logs" }];
 
-export function GuildShell({
+export function GuildShellView({
   guildId,
   guildName,
+  locale,
   children
 }: {
   guildId: string;
   guildName: string;
+  locale: Locale;
   children: ReactNode;
 }) {
   return (
@@ -42,11 +48,11 @@ export function GuildShell({
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuItem asChild>
-              <Link href={`/g/${guildId}/settings`}>サーバー設定</Link>
+              <Link href={`/g/${guildId}/settings`}>{locale.guildShell.serverSettings}</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/g">サーバーを切り替える</Link>
+              <Link href="/g">{locale.guildShell.switchServer}</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -64,5 +70,26 @@ export function GuildShell({
       </nav>
       <main className="flex-1">{children}</main>
     </div>
+  );
+}
+
+export function GuildShell({
+  guildId,
+  guildName,
+  children
+}: {
+  guildId: string;
+  guildName: string;
+  children: ReactNode;
+}) {
+  const query = trpc.guildSettings.getLanguage.useQuery({ guildId });
+  const locale = getLocale(query.data?.language ?? "ja");
+
+  return (
+    <LocaleProvider value={locale}>
+      <GuildShellView guildId={guildId} guildName={guildName} locale={locale}>
+        {children}
+      </GuildShellView>
+    </LocaleProvider>
   );
 }
