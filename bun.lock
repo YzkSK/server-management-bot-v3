@@ -119,6 +119,20 @@
         "typescript": "^7.0.2",
       },
     },
+    "packages/guild-settings": {
+      "name": "@sm-bot/guild-settings",
+      "version": "0.1.0",
+      "dependencies": {
+        "@sm-bot/dashboard-access": "workspace:*",
+        "@sm-bot/db": "workspace:*",
+        "@sm-bot/shared": "workspace:*",
+        "@trpc/server": "^11.0.0",
+        "zod": "^3.24.1",
+      },
+      "devDependencies": {
+        "typescript": "^7.0.2",
+      },
+    },
     "packages/logging": {
       "name": "@sm-bot/logging",
       "version": "0.1.0",
@@ -537,6 +551,8 @@
     "@sm-bot/dashboard-access": ["@sm-bot/dashboard-access@workspace:packages/dashboard-access"],
 
     "@sm-bot/db": ["@sm-bot/db@workspace:packages/db"],
+
+    "@sm-bot/guild-settings": ["@sm-bot/guild-settings@workspace:packages/guild-settings"],
 
     "@sm-bot/logging": ["@sm-bot/logging@workspace:packages/logging"],
 
