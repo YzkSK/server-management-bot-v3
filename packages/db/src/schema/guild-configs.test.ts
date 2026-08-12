@@ -6,7 +6,7 @@ import { parseDatabaseEnv } from "@sm-bot/config";
 import { eq, inArray } from "drizzle-orm";
 
 import { createDbConnection, type DbConnection } from "../client.js";
-import { getGuildLogMode, setGuildLogMode } from "../repositories/guild-configs.js";
+import { getGuildLanguage, getGuildLogMode, setGuildLanguage, setGuildLogMode } from "../repositories/guild-configs.js";
 import { guildConfigs, guilds } from "./index.js";
 
 const TEST_GUILD_ID = `guild-configs-schema-${randomUUID()}`;
@@ -158,5 +158,46 @@ describe("guild_configs schema constraints", () => {
 
     assert.equal(await getGuildLogMode(connection.db, TEST_GUILD_ID), "metadata_only");
     assert.equal(await getGuildLogMode(connection.db, OTHER_TEST_GUILD_ID), "disabled");
+  });
+
+  it("defaults language to ja when no value is provided", async () => {
+    const [config] = await connection.db
+      .insert(guildConfigs)
+      .values({ guildId: TEST_GUILD_ID })
+      .returning();
+
+    assert.equal(config?.language, "ja");
+  });
+
+  it("rejects a language outside ('ja', 'en') via the CHECK constraint", async () => {
+    await assert.rejects(
+      connection.db.insert(guildConfigs).values({
+        guildId: TEST_GUILD_ID,
+        // CastはDB側CHECK制約を検証するため、GuildLanguage型を意図的にバイパスする。
+        language: "fr" as unknown as "ja" | "en"
+      }),
+      (rawError: unknown) => {
+        const error = unwrapPostgresError(rawError);
+        assert.ok(isPostgresError(error));
+        assert.equal(error.code, "23514");
+        assert.equal(error.constraint_name, "guild_configs_language_check");
+        return true;
+      }
+    );
+  });
+
+  it("getGuildLanguage / setGuildLanguage round-trip through the real database", async () => {
+    assert.equal(await getGuildLanguage(connection.db, TEST_GUILD_ID), "ja");
+
+    await setGuildLanguage(connection.db, TEST_GUILD_ID, "en");
+    assert.equal(await getGuildLanguage(connection.db, TEST_GUILD_ID), "en");
+  });
+
+  it("scopes getGuildLanguage to the requested guild and does not leak another guild's config", async () => {
+    await setGuildLanguage(connection.db, TEST_GUILD_ID, "en");
+    await setGuildLanguage(connection.db, OTHER_TEST_GUILD_ID, "ja");
+
+    assert.equal(await getGuildLanguage(connection.db, TEST_GUILD_ID), "en");
+    assert.equal(await getGuildLanguage(connection.db, OTHER_TEST_GUILD_ID), "ja");
   });
 });
