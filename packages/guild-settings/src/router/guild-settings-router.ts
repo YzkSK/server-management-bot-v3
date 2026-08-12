@@ -2,7 +2,12 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { CAP, guildLanguages } from "@sm-bot/shared";
-import { assertGuildScope, requireCapability, router } from "@sm-bot/dashboard-access";
+import {
+  assertGuildScope,
+  protectedProcedure,
+  requireCapability,
+  router
+} from "@sm-bot/dashboard-access";
 import {
   getGuildLanguage as getGuildLanguageDefault,
   setGuildLanguage as setGuildLanguageDefault,
@@ -20,7 +25,7 @@ export function createGuildSettingsRouter(deps: CreateGuildSettingsRouterDeps) {
   const setGuildLanguageImpl = deps.setGuildLanguage ?? setGuildLanguageDefault;
 
   return router({
-    getLanguage: requireCapability(CAP.MANAGE_GUILD_SETTINGS)
+    getLanguage: protectedProcedure
       .input(z.object({ guildId: z.string().min(1) }))
       .query(async ({ ctx, input }) => {
         const guildId = assertGuildScope(ctx, input.guildId);
