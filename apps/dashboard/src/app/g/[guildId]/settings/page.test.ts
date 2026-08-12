@@ -63,6 +63,52 @@ describe("deriveSectionState", () => {
       })
     ).toEqual({ kind: "ready", value: "full", selected: "disabled", isSaving: true, saveError: null });
   });
+
+  test("reflects the value written directly into the query cache immediately after a save", () => {
+    // page.tsxのonSuccessはutils.X.setData()でクエリキャッシュ自体を更新するため、
+    // 以降query.dataは直ちに保存済みの値を返す。バックグラウンドのrefetch()が
+    // 失敗しても、この時点でquery.dataはすでに新しい値になっている。
+    expect(
+      deriveSectionState({
+        canManage: true,
+        query: { data: "disabled", error: null, isFetching: false },
+        selected: null,
+        isSaving: false,
+        saveError: null
+      })
+    ).toEqual({ kind: "ready", value: "disabled", selected: "disabled", isSaving: false, saveError: null });
+  });
+
+  test("picks up a later genuine server-side change instead of staying pinned to a previously saved value", () => {
+    // シナリオ: 直前のテストと同じセッションで、保存によりquery.dataがdisabledになった後、
+    // 別の管理者がさらにfullへ変更し、バックグラウンドのrefetchでquery.dataがfullに更新された。
+    // deriveSectionStateは保存結果を覚えておく別状態(シャドー状態)を一切持たず、常に
+    // query.dataをそのまま権威あるソースとして使うため、新しいfullがそのまま
+    // 反映されるべき(disabledに固定されたままにならない)。
+    const afterSave = deriveSectionState({
+      canManage: true,
+      query: { data: "disabled", error: null, isFetching: false },
+      selected: null,
+      isSaving: false,
+      saveError: null
+    });
+    expect(afterSave.kind === "ready" && afterSave.value).toBe("disabled");
+
+    const afterLaterServerSideChange = deriveSectionState({
+      canManage: true,
+      query: { data: "full", error: null, isFetching: false },
+      selected: null,
+      isSaving: false,
+      saveError: null
+    });
+    expect(afterLaterServerSideChange).toEqual({
+      kind: "ready",
+      value: "full",
+      selected: "full",
+      isSaving: false,
+      saveError: null
+    });
+  });
 });
 
 describe("deriveSettingsPageState", () => {
@@ -139,6 +185,47 @@ describe("deriveSettingsPageState", () => {
     expect(state.kind).toBe("loaded");
     expect(state.kind === "loaded" && state.logMode).toEqual({ kind: "hidden" });
     expect(state.kind === "loaded" && state.language.kind).toBe("ready");
+  });
+
+  test("returns an error state (not no-permission) when the permission check itself fails", () => {
+    // meQuery.isLoadingはクエリがエラーで終わった場合もfalseになる。
+    // それをそのままno-permission判定に使うと、実際は権限確認自体が失敗しているだけなのに
+    // 「権限がありません」という誤った表示になってしまう。
+    expect(
+      deriveSettingsPageState({
+        canManageLoggingSettings: undefined,
+        canManageGuildSettings: undefined,
+        permissionCheckError: { message: "network error" },
+        permissionCheckIsFetching: false,
+        logModeQuery: NOT_FETCHED,
+        selectedLogMode: null,
+        isSavingLogMode: false,
+        logModeSaveError: null,
+        languageQuery: NOT_FETCHED,
+        selectedLanguage: null,
+        isSavingLanguage: false,
+        languageSaveError: null
+      })
+    ).toEqual({ kind: "error", message: "network error", isRetrying: false });
+  });
+
+  test("marks the permission-check error state as retrying while a refetch is in flight", () => {
+    expect(
+      deriveSettingsPageState({
+        canManageLoggingSettings: undefined,
+        canManageGuildSettings: undefined,
+        permissionCheckError: { message: "network error" },
+        permissionCheckIsFetching: true,
+        logModeQuery: NOT_FETCHED,
+        selectedLogMode: null,
+        isSavingLogMode: false,
+        logModeSaveError: null,
+        languageQuery: NOT_FETCHED,
+        selectedLanguage: null,
+        isSavingLanguage: false,
+        languageSaveError: null
+      })
+    ).toEqual({ kind: "error", message: "network error", isRetrying: true });
   });
 
   test("shows both sections when the caller holds both capabilities", () => {
