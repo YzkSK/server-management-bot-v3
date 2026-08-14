@@ -99,7 +99,7 @@ export const guildConfigs = pgTable(
     ),
     languageCheck: check(
       "guild_configs_language_check",
-      sql`${table.language} in ('ja', 'en')`
+      sql`${table.language} in ${sql.raw(`(${guildLanguages.map((lang) => `'${lang}'`).join(", ")})`)}`
     )
   })
 );
