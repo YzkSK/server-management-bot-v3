@@ -27,6 +27,18 @@ export const ja: Locale = {
     languageOptionEn: "English"
   },
   logs: {
+    category: {
+      all: "すべて",
+      message: "メッセージ",
+      member: "メンバー",
+      audit: "監査",
+      voice: "ボイス",
+      temp_vc: "一時VC",
+      recruitment: "募集",
+      tts: "読み上げ",
+      system: "システム",
+      dashboard: "ダッシュボード"
+    },
     loading: "読み込み中...",
     loadFailed: "ログの取得に失敗しました。",
     retrying: "再試行中…",
