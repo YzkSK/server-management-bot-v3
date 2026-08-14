@@ -62,7 +62,7 @@ describe("LogsPageView", () => {
     expect(memberButtonTag).toContain('aria-selected="true"');
   });
 
-  test("shows Loading... while loading", () => {
+  test("shows the localized loading message while loading", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loading" }}
@@ -81,7 +81,7 @@ describe("LogsPageView", () => {
       />
     );
 
-    expect(html).toContain("Loading...");
+    expect(html).toContain(locale.logs.loading);
   });
 
   test("shows a generic error message without leaking the raw error", () => {
@@ -172,7 +172,7 @@ describe("LogsPageView", () => {
       />
     );
 
-    expect(html).not.toContain("Raw JSON");
+    expect(html).not.toContain(locale.logs.viewModeRaw);
   });
 
   test("shows the Human View/Raw JSON toggle when canViewRaw is true", () => {
@@ -194,8 +194,8 @@ describe("LogsPageView", () => {
       />
     );
 
-    expect(html).toContain("Human View");
-    expect(html).toContain("Raw JSON");
+    expect(html).toContain(locale.logs.viewModeHuman);
+    expect(html).toContain(locale.logs.viewModeRaw);
   });
 
   test("renders payload as JSON in raw mode, and never when payload is null", () => {
@@ -312,7 +312,7 @@ describe("LogsPageView", () => {
         onScrollAwayFromTop={noop}
       />
     );
-    expect(withMore).toContain("Load more");
+    expect(withMore).toContain(locale.logs.loadMore);
 
     const withoutMore = renderToString(
       <LogsPageView
@@ -331,7 +331,70 @@ describe("LogsPageView", () => {
         onScrollAwayFromTop={noop}
       />
     );
-    expect(withoutMore).not.toContain("Load more");
+    expect(withoutMore).not.toContain(locale.logs.loadMore);
+  });
+
+  test("shows the localized loading label while fetching the next page", () => {
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loaded", entries: [], hasNextPage: true, isFetchingNextPage: true }}
+        locale={locale}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+    expect(html).toContain(locale.logs.loadingMore);
+  });
+
+  test("localizes the view-mode group aria-label", () => {
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={true}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+    expect(html).toContain(`aria-label="${locale.logs.viewModeGroupLabel}"`);
+  });
+
+  test("localizes the realtime connection status aria-label", () => {
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loaded", entries: [], hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+        connectionStatus="live"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+    expect(html).toContain(locale.logs.realtimeStatusLabel({ status: locale.logs.connectionLive }));
   });
 
   test("shows a live status dot with the given status", () => {

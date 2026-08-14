@@ -4,9 +4,12 @@ export type Locale = {
     serverSettings: string;
   };
   guildSelector: {
+    loading: string;
     loadFailed: string;
+    empty: string;
   };
   settings: {
+    loading: string;
     noPermission: string;
     loadFailed: string;
     retrying: string;
@@ -22,9 +25,21 @@ export type Locale = {
     languageOptionEn: string;
   };
   logs: {
+    loading: string;
     loadFailed: string;
     retrying: string;
     retry: string;
     newLogsCount: (vars: { count: number }) => string;
+    viewModeHuman: string;
+    viewModeRaw: string;
+    viewModeGroupLabel: string;
+    connectionIdle: string;
+    connectionConnecting: string;
+    connectionLive: string;
+    connectionOffline: string;
+    connectionError: string;
+    realtimeStatusLabel: (vars: { status: string }) => string;
+    loadingMore: string;
+    loadMore: string;
   };
 };

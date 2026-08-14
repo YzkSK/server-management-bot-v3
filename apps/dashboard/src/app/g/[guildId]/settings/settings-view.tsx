@@ -1,10 +1,10 @@
 import type { GuildLogMode } from "@sm-bot/db";
-import type { GuildLanguage, Locale } from "@sm-bot/shared";
+import { guildLanguages, type GuildLanguage, type Locale } from "@sm-bot/shared";
 
 import { Button } from "../../../../components/ui/button";
 
 const LOG_MODE_OPTIONS: readonly GuildLogMode[] = ["full", "metadata_only", "disabled"];
-const LANGUAGE_OPTIONS: readonly GuildLanguage[] = ["ja", "en"];
+const LANGUAGE_OPTIONS: readonly GuildLanguage[] = guildLanguages;
 
 export type SettingsSectionState<TValue> =
   | { kind: "hidden" }
@@ -46,7 +46,7 @@ export function SettingsPageView({
   }
 
   if (state.kind === "loading") {
-    return <p className="p-4 text-sm text-muted-foreground">Loading...</p>;
+    return <p className="p-4 text-sm text-muted-foreground">{locale.settings.loading}</p>;
   }
 
   if (state.kind === "error") {
@@ -120,7 +120,7 @@ function LogModeSection({
   onRetry: () => void;
 }) {
   if (section.kind === "loading") {
-    return <p className="text-sm text-muted-foreground">Loading...</p>;
+    return <p className="text-sm text-muted-foreground">{locale.settings.loading}</p>;
   }
 
   if (section.kind === "error") {
@@ -174,7 +174,7 @@ function LanguageSection({
   onRetry: () => void;
 }) {
   if (section.kind === "loading") {
-    return <p className="text-sm text-muted-foreground">Loading...</p>;
+    return <p className="text-sm text-muted-foreground">{locale.settings.loading}</p>;
   }
 
   if (section.kind === "error") {
