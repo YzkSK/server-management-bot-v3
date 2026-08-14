@@ -5,11 +5,16 @@ import { renderToString } from "react-dom/server";
 import { detectBrowserLanguage, GuildSelectorView, type GuildSelectorState } from "./guild-selector";
 
 describe("GuildSelectorView", () => {
-  test("renders Loading... while loading", () => {
-    const html = renderToString(
+  test("renders the localized loading message while loading", () => {
+    const jaHtml = renderToString(
       <GuildSelectorView state={{ kind: "loading" }} locale={getLocale("ja")} />
     );
-    expect(html).toContain("Loading...");
+    expect(jaHtml).toContain("読み込み中...");
+
+    const enHtml = renderToString(
+      <GuildSelectorView state={{ kind: "loading" }} locale={getLocale("en")} />
+    );
+    expect(enHtml).toContain("Loading...");
   });
 
   test("renders a generic error message on failure without leaking the raw error", () => {
@@ -20,11 +25,16 @@ describe("GuildSelectorView", () => {
     expect(html).not.toContain("boom");
   });
 
-  test("renders a message when there are no accessible guilds", () => {
-    const html = renderToString(
+  test("renders a localized message when there are no accessible guilds", () => {
+    const jaHtml = renderToString(
       <GuildSelectorView state={{ kind: "loaded", guilds: [] }} locale={getLocale("ja")} />
     );
-    expect(html).toContain("No accessible guilds found.");
+    expect(jaHtml).toContain("アクセスできるサーバーが見つかりません。");
+
+    const enHtml = renderToString(
+      <GuildSelectorView state={{ kind: "loaded", guilds: [] }} locale={getLocale("en")} />
+    );
+    expect(enHtml).toContain("No accessible guilds found.");
   });
 
   test("renders a link per guild", () => {

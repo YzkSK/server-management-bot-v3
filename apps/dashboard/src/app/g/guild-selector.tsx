@@ -16,7 +16,7 @@ export function GuildSelectorView({ state, locale }: { state: GuildSelectorState
   if (state.kind === "loading") {
     return (
       <p role="status" aria-live="polite" className="p-4 text-sm text-muted-foreground">
-        Loading...
+        {locale.guildSelector.loading}
       </p>
     );
   }
@@ -32,7 +32,7 @@ export function GuildSelectorView({ state, locale }: { state: GuildSelectorState
   }
 
   if (state.guilds.length === 0) {
-    return <p className="p-4 text-sm text-muted-foreground">No accessible guilds found.</p>;
+    return <p className="p-4 text-sm text-muted-foreground">{locale.guildSelector.empty}</p>;
   }
 
   return (
