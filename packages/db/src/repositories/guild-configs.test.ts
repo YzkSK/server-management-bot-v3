@@ -117,6 +117,15 @@ describe("getGuildLanguage", () => {
 
     assert.equal(language, "ja");
   });
+
+  it("throws when the stored language is not a supported value", async () => {
+    const db = createFakeDb([{ guildId: "guild-1", language: "fr" }]);
+
+    await assert.rejects(
+      () => getGuildLanguage(db, "guild-1"),
+      /Unexpected guild language value: fr/
+    );
+  });
 });
 
 describe("setGuildLanguage", () => {
