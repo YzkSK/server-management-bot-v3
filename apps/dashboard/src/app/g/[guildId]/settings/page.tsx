@@ -213,12 +213,12 @@ export default function GuildSettingsPage() {
       {
         onSuccess: (result) => {
           utils.guildSettings.getLanguage.setData({ guildId }, { language: result.language });
-          setSelectedLanguage(null);
+          setSelectedLanguage((current) => (current === nextLanguage ? null : current));
           void languageQuery.refetch();
         },
         onError: (error) => {
           setLanguageSaveError(error.message);
-          setSelectedLanguage(null);
+          setSelectedLanguage((current) => (current === nextLanguage ? null : current));
         }
       }
     );
