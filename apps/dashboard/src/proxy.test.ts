@@ -22,11 +22,14 @@ const dummyCache: DiscordTokenRefreshCacheClient = {
   eval: async () => 0
 };
 
+// happy-domがグローバルRequestをFetch仕様に準拠させているため、Request初期化時に
+// "cookie"ヘッダーを渡しても禁止ヘッダーとして無視される。構築後にcookies.set()で
+// 設定することでこの制約を回避する。
 async function buildRequest(tokenPayload: JWT): Promise<NextRequest> {
   const encoded = await encode({ token: tokenPayload, secret: SECRET, maxAge: 30 * 24 * 60 * 60 });
-  return new NextRequest("http://localhost:3000/g/guild-1", {
-    headers: { cookie: `${COOKIE_NAME}=${encoded}` }
-  });
+  const req = new NextRequest("http://localhost:3000/g/guild-1");
+  req.cookies.set(COOKIE_NAME, encoded);
+  return req;
 }
 
 describe("proxy", () => {
@@ -174,9 +177,8 @@ describe("proxy", () => {
       // decode自体は成功しつつ「残り有効時間なし」の分岐を再現する。
       maxAge: -5
     });
-    const req = new NextRequest("http://localhost:3000/g/guild-1", {
-      headers: { cookie: `${COOKIE_NAME}=${encoded}` }
-    });
+    const req = new NextRequest("http://localhost:3000/g/guild-1");
+    req.cookies.set(COOKIE_NAME, encoded);
 
     const response = await proxy(req);
 
@@ -201,9 +203,11 @@ describe("proxy", () => {
       secret: SECRET,
       maxAge: 30 * 24 * 60 * 60
     });
-    const req = new NextRequest("http://localhost:3000/g/guild-1", {
-      headers: { cookie: `${COOKIE_NAME}=${encoded}; ${COOKIE_NAME}.0=chunk-placeholder` }
-    });
+    // next-auth本来のchunking仕様(次のCookieを`${name}.0`, `${name}.1`...に分割する)
+    // を再現する。素のCOOKIE_NAMEも同時に立てるとSessionStoreが両方を連結してしまい
+    // JWEが壊れ、getToken()がnullを返す別の分岐(トークンなし)を検証してしまうため置かない。
+    const req = new NextRequest("http://localhost:3000/g/guild-1");
+    req.cookies.set(`${COOKIE_NAME}.0`, encoded);
 
     const response = await proxy(req);
 

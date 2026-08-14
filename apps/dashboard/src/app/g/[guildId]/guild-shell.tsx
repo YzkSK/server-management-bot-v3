@@ -1,9 +1,17 @@
 "use client";
 
+import { ChevronDownIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Button } from "../../../components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "../../../components/ui/dropdown-menu";
 
 interface NavItem {
   label: string;
@@ -25,10 +33,21 @@ export function GuildShell({
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between border-b px-4 py-3">
-        <span className="text-sm font-semibold">{guildName}</span>
-        <Button asChild variant="outline" size="sm">
-          <Link href="/g">Switch server</Link>
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="min-w-0 max-w-64" title={guildName}>
+              <span className="truncate font-semibold">{guildName}</span>
+              <ChevronDownIcon aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem disabled>サーバー設定</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/g">サーバーを切り替える</Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
       <nav className="flex items-center gap-4 border-b px-4 py-2">
         {NAV_ITEMS.map((item) => (

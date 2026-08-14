@@ -1,20 +1,38 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "bun:test";
-import { renderToString } from "react-dom/server";
 
 import { GuildShell } from "./guild-shell";
 
 describe("GuildShell", () => {
-  test("renders the guild name, a link back to /g, and the nav items", () => {
-    const html = renderToString(
+  test("renders the guild name trigger, nav items, and children", () => {
+    render(
       <GuildShell guildId="guild-1" guildName="My Guild">
         <p>child content</p>
       </GuildShell>
     );
 
-    expect(html).toContain("My Guild");
-    expect(html).toContain('href="/g"');
-    expect(html).toContain('href="/g/guild-1/logs"');
-    expect(html).toContain("Logs");
-    expect(html).toContain("child content");
+    expect(screen.getByRole("button", { name: /My Guild/ })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Logs" }).getAttribute("href")).toBe(
+      "/g/guild-1/logs"
+    );
+    expect(screen.getByText("child content")).toBeDefined();
+  });
+
+  test("opens the guild menu with a disabled settings item and a switch-server link", async () => {
+    const user = userEvent.setup();
+    render(
+      <GuildShell guildId="guild-1" guildName="My Guild">
+        <p>child content</p>
+      </GuildShell>
+    );
+
+    await user.click(screen.getByRole("button", { name: /My Guild/ }));
+
+    const settingsItem = screen.getByRole("menuitem", { name: "サーバー設定" });
+    expect(settingsItem.getAttribute("data-disabled")).not.toBeNull();
+
+    const switchItem = screen.getByRole("menuitem", { name: "サーバーを切り替える" });
+    expect(switchItem.getAttribute("href")).toBe("/g");
   });
 });
