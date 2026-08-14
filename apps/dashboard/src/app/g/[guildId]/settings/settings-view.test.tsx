@@ -46,10 +46,10 @@ describe("SettingsPageView", () => {
     expect(html).toContain("この設定を変更する権限がありません。");
   });
 
-  test("shows Loading... while loading", () => {
+  test("shows the localized loading message while loading", () => {
     const html = render({ kind: "loading" });
 
-    expect(html).toContain("Loading...");
+    expect(html).toContain(locale.settings.loading);
   });
 
   test("shows a generic error message without leaking the raw error, plus a retry button", () => {
@@ -75,8 +75,12 @@ describe("SettingsPageView", () => {
       language: READY_BOTH.language
     });
 
-    expect(html).not.toContain("ログ記録モード");
-    expect(html).toContain("言語");
+    expect(html).not.toContain(locale.settings.logModeHeading);
+    const headingIndex = html.indexOf("<h2");
+    expect(headingIndex).toBeGreaterThan(-1);
+    expect(html.slice(headingIndex, html.indexOf("</h2>", headingIndex))).toContain(
+      locale.settings.languageHeading
+    );
   });
 
   test("renders a radio option per log mode with the current selection checked", () => {
@@ -111,7 +115,7 @@ describe("SettingsPageView", () => {
   test("shows the log mode save error message when present", () => {
     const html = render({
       ...READY_BOTH,
-      logMode: { ...READY_BOTH.logMode, kind: "ready", value: "full", selected: "disabled", isSaving: false, saveError: "network error" } as never
+      logMode: { kind: "ready", value: "full", selected: "disabled", isSaving: false, saveError: "network error" }
     });
 
     expect(html).toContain("network error");

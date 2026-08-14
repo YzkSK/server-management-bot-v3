@@ -40,6 +40,20 @@ describe("deriveSectionState", () => {
     ).toEqual({ kind: "error", message: "boom", isRetrying: false });
   });
 
+  test("keeps showing the fetched value when a background refetch fails", () => {
+    // data判定はerror判定より先に評価されるため、取得済みの値がある状態で
+    // バックグラウンドの再取得が失敗しても、直前の値を表示し続ける(意図的な優先順位)。
+    expect(
+      deriveSectionState({
+        canManage: true,
+        query: { data: "full", error: { message: "boom" }, isFetching: false },
+        selected: null,
+        isSaving: false,
+        saveError: null
+      })
+    ).toEqual({ kind: "ready", value: "full", selected: "full", isSaving: false, saveError: null });
+  });
+
   test("defaults selected to the fetched value when untouched", () => {
     expect(
       deriveSectionState({
@@ -80,28 +94,19 @@ describe("deriveSectionState", () => {
   });
 
   test("picks up a later genuine server-side change instead of staying pinned to a previously saved value", () => {
-    // シナリオ: 直前のテストと同じセッションで、保存によりquery.dataがdisabledになった後、
-    // 別の管理者がさらにfullへ変更し、バックグラウンドのrefetchでquery.dataがfullに更新された。
     // deriveSectionStateは保存結果を覚えておく別状態(シャドー状態)を一切持たず、常に
-    // query.dataをそのまま権威あるソースとして使うため、新しいfullがそのまま
-    // 反映されるべき(disabledに固定されたままにならない)。
-    const afterSave = deriveSectionState({
-      canManage: true,
-      query: { data: "disabled", error: null, isFetching: false },
-      selected: null,
-      isSaving: false,
-      saveError: null
-    });
-    expect(afterSave.kind === "ready" && afterSave.value).toBe("disabled");
-
-    const afterLaterServerSideChange = deriveSectionState({
-      canManage: true,
-      query: { data: "full", error: null, isFetching: false },
-      selected: null,
-      isSaving: false,
-      saveError: null
-    });
-    expect(afterLaterServerSideChange).toEqual({
+    // query.dataをそのまま権威あるソースとして使うため、直前にdisabledで保存済みでも、
+    // 別の管理者がfullへ変更しバックグラウンドのrefetchでquery.dataがfullになれば、
+    // 新しいfullがそのまま反映されるべき(disabledに固定されたままにならない)。
+    expect(
+      deriveSectionState({
+        canManage: true,
+        query: { data: "full", error: null, isFetching: false },
+        selected: null,
+        isSaving: false,
+        saveError: null
+      })
+    ).toEqual({
       kind: "ready",
       value: "full",
       selected: "full",
