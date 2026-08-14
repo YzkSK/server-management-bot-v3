@@ -10,7 +10,7 @@ function noop() {}
 const locale = getLocale("ja");
 
 describe("LogsPageView", () => {
-  test("renders a tab per log category", () => {
+  test("renders a localized tab per log category", () => {
     const html = renderToString(
       <LogsPageView
         state={{ kind: "loading" }}
@@ -29,12 +29,34 @@ describe("LogsPageView", () => {
       />
     );
 
-    expect(html).toContain("All");
-    expect(html).toContain("Message");
-    expect(html).toContain("Temp VC");
-    expect(html).toContain("Dashboard");
+    expect(html).toContain(locale.logs.category.all);
+    expect(html).toContain(locale.logs.category.message);
+    expect(html).toContain(locale.logs.category.temp_vc);
+    expect(html).toContain(locale.logs.category.dashboard);
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab"');
+
+    const enLocale = getLocale("en");
+    const enHtml = renderToString(
+      <LogsPageView
+        state={{ kind: "loading" }}
+        locale={enLocale}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+
+    expect(enHtml).toContain(enLocale.logs.category.all);
+    expect(enHtml).toContain(enLocale.logs.category.dashboard);
   });
 
   test("marks the active category tab with aria-selected", () => {
@@ -56,7 +78,7 @@ describe("LogsPageView", () => {
       />
     );
 
-    const memberButtonIndex = html.indexOf(">Member<");
+    const memberButtonIndex = html.indexOf(`>${locale.logs.category.member}<`);
     const memberButtonStart = html.lastIndexOf("<button", memberButtonIndex);
     const memberButtonTag = html.slice(memberButtonStart, memberButtonIndex);
     expect(memberButtonTag).toContain('aria-selected="true"');

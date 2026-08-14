@@ -47,19 +47,6 @@ export type LogsPageState =
       isFetchingNextPage: boolean;
     };
 
-const CATEGORY_LABELS: Record<LogCategory, string> = {
-  all: "All",
-  message: "Message",
-  member: "Member",
-  audit: "Audit",
-  voice: "Voice",
-  temp_vc: "Temp VC",
-  recruitment: "Recruitment",
-  tts: "TTS",
-  system: "System",
-  dashboard: "Dashboard"
-};
-
 export function LogsPageView({
   state,
   locale,
@@ -107,7 +94,7 @@ export function LogsPageView({
           <TabsList>
             {LOG_CATEGORIES.map((c) => (
               <TabsTrigger key={c} value={c}>
-                {CATEGORY_LABELS[c]}
+                {locale.logs.category[c]}
               </TabsTrigger>
             ))}
           </TabsList>

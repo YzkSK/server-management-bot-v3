@@ -1,3 +1,5 @@
+import type { LogCategory } from "../log-categories.js";
+
 export type Locale = {
   guildShell: {
     switchServer: string;
@@ -25,6 +27,7 @@ export type Locale = {
     languageOptionEn: string;
   };
   logs: {
+    category: Record<LogCategory, string>;
     loading: string;
     loadFailed: string;
     retrying: string;

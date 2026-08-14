@@ -27,6 +27,18 @@ export const en: Locale = {
     languageOptionEn: "English"
   },
   logs: {
+    category: {
+      all: "All",
+      message: "Message",
+      member: "Member",
+      audit: "Audit",
+      voice: "Voice",
+      temp_vc: "Temp VC",
+      recruitment: "Recruitment",
+      tts: "TTS",
+      system: "System",
+      dashboard: "Dashboard"
+    },
     loading: "Loading...",
     loadFailed: "Failed to load logs.",
     retrying: "Retrying…",
