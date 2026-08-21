@@ -38,6 +38,22 @@ describe("dashboardAccessRouter.me", () => {
     expect(result.isGuildOwner).toBe(false);
     expect(result.capabilities).toBe(CAP.VIEW_LOGS.toString(10));
   });
+
+  it("accepts a matching guildId (guild-scoped cache key)", async () => {
+    const caller = dashboardAccessRouter.createCaller(
+      context({ guildId: "guild-1", capabilities: CAP.VIEW_LOGS })
+    );
+
+    const result = await caller.me({ guildId: "guild-1" });
+
+    expect(result.userId).toBe("user-1");
+  });
+
+  it("rejects a guildId that doesn't match the caller's authorized guild", async () => {
+    const caller = dashboardAccessRouter.createCaller(context({ guildId: "guild-1" }));
+
+    await rejectsWithCode(caller.me({ guildId: "guild-2" }), "FORBIDDEN");
+  });
 });
 
 describe("dashboardAccessRouter.myGuilds", () => {

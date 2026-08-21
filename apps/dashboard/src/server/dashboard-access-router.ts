@@ -36,12 +36,22 @@ const grantInput = z.object({
   capabilities: capabilitiesWireInput
 });
 
+const meInput = z.object({ guildId: z.string().min(1) }).optional();
+
 export const dashboardAccessRouter = router({
-  me: protectedProcedure.query(({ ctx }) => ({
-    userId: ctx.userId,
-    isGuildOwner: ctx.isGuildOwner,
-    capabilities: capabilitiesToWireString(ctx.capabilities)
-  })),
+  me: protectedProcedure
+    .input(meInput)
+    .query(({ ctx, input }) => {
+      if (input?.guildId && input.guildId !== ctx.guildId) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      return {
+        userId: ctx.userId,
+        isGuildOwner: ctx.isGuildOwner,
+        capabilities: capabilitiesToWireString(ctx.capabilities)
+      };
+    }),
 
   myGuilds: protectedProcedure.query(async ({ ctx }) => {
     if (!ctx.discordAccessToken) {

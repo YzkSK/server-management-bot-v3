@@ -19,7 +19,7 @@ describe("GuildShell", () => {
     expect(screen.getByText("child content")).toBeDefined();
   });
 
-  test("opens the guild menu with a disabled settings item and a switch-server link", async () => {
+  test("opens the guild menu with links to settings and server switching", async () => {
     const user = userEvent.setup();
     render(
       <GuildShell guildId="guild-1" guildName="My Guild">
@@ -30,7 +30,8 @@ describe("GuildShell", () => {
     await user.click(screen.getByRole("button", { name: /My Guild/ }));
 
     const settingsItem = screen.getByRole("menuitem", { name: "サーバー設定" });
-    expect(settingsItem.getAttribute("data-disabled")).not.toBeNull();
+    expect(settingsItem.getAttribute("data-disabled")).toBeNull();
+    expect(settingsItem.getAttribute("href")).toBe("/g/guild-1/settings");
 
     const switchItem = screen.getByRole("menuitem", { name: "サーバーを切り替える" });
     expect(switchItem.getAttribute("href")).toBe("/g");

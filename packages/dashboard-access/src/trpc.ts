@@ -24,3 +24,26 @@ export function requireCapability(cap: CapabilityBit) {
     return next({ ctx });
   });
 }
+
+// guildId必須のprocedureで共通に使う不変条件チェック:
+// (1) requireCapability通過後はctx.guildIdが必ず設定されている(念のための防御)
+// (2) react-queryのキャッシュキー分離のためinputに含めたguildIdが、
+//     ヘッダー由来で権限判定済みのctx.guildIdと一致していること(#161)
+// 一致したctx.guildId(non-null)を返す。
+export function assertGuildScope(
+  ctx: Pick<DashboardAccessContext, "guildId">,
+  inputGuildId: string
+): string {
+  if (!ctx.guildId) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "guildId missing after capability check"
+    });
+  }
+
+  if (inputGuildId !== ctx.guildId) {
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+
+  return ctx.guildId;
+}

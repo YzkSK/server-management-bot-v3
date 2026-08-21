@@ -7,10 +7,14 @@ import {
   hasCapability,
   LOG_CATEGORIES
 } from "@sm-bot/shared";
-import { requireCapability, router } from "@sm-bot/dashboard-access";
+import { assertGuildScope, requireCapability, router } from "@sm-bot/dashboard-access";
 import {
+  getGuildLogMode as getGuildLogModeDefault,
+  guildLogModes,
   listLogEvents as listLogEventsDefault,
+  setGuildLogMode as setGuildLogModeDefault,
   type DbClient,
+  type GuildLogMode,
   type LogEventRow
 } from "@sm-bot/db";
 
@@ -20,6 +24,7 @@ const cursorSchema = z.object({
 });
 
 const listLogsInput = z.object({
+  guildId: z.string().min(1),
   category: z.enum(LOG_CATEGORIES),
   cursor: cursorSchema.optional(),
   limit: z.number().int().min(1).max(100).default(50)
@@ -57,30 +62,26 @@ function toLogEntryDto(row: LogEventRow, includePayload: boolean): LogEntryDto {
 export interface CreateLogsRouterDeps {
   getDb: () => DbClient;
   listLogEvents?: typeof listLogEventsDefault;
+  getGuildLogMode?: typeof getGuildLogModeDefault;
+  setGuildLogMode?: typeof setGuildLogModeDefault;
 }
 
 export function createLogsRouter(deps: CreateLogsRouterDeps) {
   const listLogEventsImpl = deps.listLogEvents ?? listLogEventsDefault;
+  const getGuildLogModeImpl = deps.getGuildLogMode ?? getGuildLogModeDefault;
+  const setGuildLogModeImpl = deps.setGuildLogMode ?? setGuildLogModeDefault;
 
   return router({
     list: requireCapability(CAP.VIEW_LOGS)
       .input(listLogsInput)
       .query(async ({ ctx, input }) => {
-        if (!ctx.guildId) {
-          // requireCapability(CAP.VIEW_LOGS)を通過した時点でguildIdは必ず
-          // 設定されている(createContextはguildId不在なら常にcapabilities: 0n
-          // を返すため)。念のための不変条件チェック。
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "guildId missing after capability check"
-          });
-        }
+        const guildId = assertGuildScope(ctx, input.guildId);
 
         const canViewRaw = hasCapability(ctx.capabilities, CAP.VIEW_LOGS_RAW);
         const eventNamePrefixes = eventNamePrefixesForCategory(input.category);
 
         const listInput: Parameters<typeof listLogEventsImpl>[1] = {
-          guildId: ctx.guildId,
+          guildId,
           eventNamePrefixes,
           limit: input.limit + 1
         };
@@ -107,6 +108,29 @@ export function createLogsRouter(deps: CreateLogsRouterDeps) {
         };
 
         return result;
+      }),
+
+    getLogMode: requireCapability(CAP.MANAGE_LOGGING_SETTINGS)
+      .input(z.object({ guildId: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        const guildId = assertGuildScope(ctx, input.guildId);
+
+        const logMode = await getGuildLogModeImpl(deps.getDb(), guildId);
+        return { logMode };
+      }),
+
+    setLogMode: requireCapability(CAP.MANAGE_LOGGING_SETTINGS)
+      .input(z.object({ logMode: z.enum(guildLogModes) }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.guildId) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "guildId missing after capability check"
+          });
+        }
+
+        const config = await setGuildLogModeImpl(deps.getDb(), ctx.guildId, input.logMode);
+        return { logMode: config.logMode };
       })
   });
 }

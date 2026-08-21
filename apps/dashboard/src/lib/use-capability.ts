@@ -1,5 +1,7 @@
 "use client";
 
+import { useParams } from "next/navigation";
+
 import { hasCapability, parseCapabilitiesWireString, type CapabilityBit } from "@sm-bot/shared";
 
 import { trpc } from "../trpc-client";
@@ -16,6 +18,7 @@ export function hasCapabilityFromWireString(
 }
 
 export function useCapability(cap: CapabilityBit): boolean {
-  const { data } = trpc.dashboardAccess.me.useQuery();
+  const { guildId } = useParams<{ guildId: string }>();
+  const { data } = trpc.dashboardAccess.me.useQuery({ guildId });
   return hasCapabilityFromWireString(data?.capabilities, cap);
 }
