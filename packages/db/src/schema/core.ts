@@ -1,4 +1,4 @@
-import { ALL_CAPABILITIES } from "@sm-bot/shared";
+import { ALL_CAPABILITIES, guildLanguages, type GuildLanguage } from "@sm-bot/shared";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -82,6 +82,7 @@ export const guildConfigs = pgTable(
       .notNull()
       .references(() => guilds.guildId, { onDelete: "cascade" }),
     logMode: text("log_mode").$type<GuildLogMode>().notNull().default("full"),
+    language: text("language").$type<GuildLanguage>().notNull().default("ja"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -95,6 +96,10 @@ export const guildConfigs = pgTable(
     logModeCheck: check(
       "guild_configs_log_mode_check",
       sql`${table.logMode} in ('full', 'metadata_only', 'disabled')`
+    ),
+    languageCheck: check(
+      "guild_configs_language_check",
+      sql`${table.language} in ${sql.raw(`(${guildLanguages.map((lang) => `'${lang}'`).join(", ")})`)}`
     )
   })
 );

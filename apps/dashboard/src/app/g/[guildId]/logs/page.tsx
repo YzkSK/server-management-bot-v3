@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 
 import { CAP, type LogCategory } from "@sm-bot/shared";
 
+import { useLocale } from "../../../../lib/locale-context";
 import { useCapability } from "../../../../lib/use-capability";
 import { trpc } from "../../../../trpc-client";
 import { filterRealtimeEntriesByCategory } from "./filter-realtime-entries-by-category";
@@ -65,6 +66,7 @@ export default function GuildLogsPage() {
   const [viewMode, setViewMode] = useState<"human" | "raw">("human");
   const canViewRaw = useCapability(CAP.VIEW_LOGS_RAW);
   const realtime = useRealtimeLogs(guildId, category);
+  const locale = useLocale();
 
   const query = trpc.logs.list.useInfiniteQuery(
     { guildId, category, limit: 50 },
@@ -81,6 +83,7 @@ export default function GuildLogsPage() {
   return (
     <LogsPageView
       state={state}
+      locale={locale}
       category={category}
       onCategoryChange={setCategory}
       canViewRaw={canViewRaw}

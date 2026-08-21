@@ -1,15 +1,43 @@
 import { describe, expect, test } from "bun:test";
 import { renderToString } from "react-dom/server";
 
+import { getLocale } from "@sm-bot/shared";
+
 import { SettingsPageView, type SettingsPageState } from "./settings-view";
 
 function noop() {}
 
+const locale = getLocale("ja");
+
+// Extracts just one radiogroup's HTML slice so "checked" assertions can be
+// scoped per section instead of counted globally across the whole page.
+function radiogroupHtml(html: string, ariaLabel: string) {
+  const start = html.indexOf(`aria-label="${ariaLabel}"`);
+  expect(start).toBeGreaterThan(-1);
+  const end = html.indexOf("</div>", start);
+  return html.slice(start, end);
+}
+
 function render(state: SettingsPageState) {
   return renderToString(
-    <SettingsPageView state={state} onLogModeChange={noop} onSave={noop} onRetry={noop} />
+    <SettingsPageView
+      state={state}
+      locale={locale}
+      onLogModeChange={noop}
+      onLogModeSave={noop}
+      onLogModeRetry={noop}
+      onLanguageChange={noop}
+      onLanguageRetry={noop}
+      onRetry={noop}
+    />
   );
 }
+
+const READY_BOTH: SettingsPageState = {
+  kind: "loaded",
+  logMode: { kind: "ready", value: "full", selected: "metadata_only", isSaving: false, saveError: null },
+  language: { kind: "ready", value: "ja", selected: "ja", isSaving: false, saveError: null }
+};
 
 describe("SettingsPageView", () => {
   test("shows a permission message when the caller lacks access", () => {
@@ -18,10 +46,10 @@ describe("SettingsPageView", () => {
     expect(html).toContain("この設定を変更する権限がありません。");
   });
 
-  test("shows Loading... while loading", () => {
+  test("shows the localized loading message while loading", () => {
     const html = render({ kind: "loading" });
 
-    expect(html).toContain("Loading...");
+    expect(html).toContain(locale.settings.loading);
   });
 
   test("shows a generic error message without leaking the raw error, plus a retry button", () => {
@@ -40,56 +68,94 @@ describe("SettingsPageView", () => {
     expect(html).toContain('disabled=""');
   });
 
-  test("renders a radio option per log mode with the current selection checked", () => {
+  test("hides a section the caller lacks capability for", () => {
     const html = render({
       kind: "loaded",
-      logMode: "full",
-      selectedLogMode: "metadata_only",
-      isSaving: false,
-      saveError: null
+      logMode: { kind: "hidden" },
+      language: READY_BOTH.language
     });
+
+    expect(html).not.toContain(locale.settings.logModeHeading);
+    const headingIndex = html.indexOf("<h2");
+    expect(headingIndex).toBeGreaterThan(-1);
+    expect(html.slice(headingIndex, html.indexOf("</h2>", headingIndex))).toContain(
+      locale.settings.languageHeading
+    );
+  });
+
+  test("renders a radio option per log mode with the current selection checked", () => {
+    const html = render(READY_BOTH);
 
     expect(html).toContain("本文を含めて記録");
     expect(html).toContain("本文を除いて記録");
     expect(html).toContain("記録しない");
-    expect(html.match(/checked=""/g)?.length).toBe(1);
+
+    const group = radiogroupHtml(html, locale.settings.logModeHeading);
+    expect(group.match(/checked=""/g)?.length).toBe(1);
+    expect(group).toContain('checked="" value="metadata_only"');
   });
 
-  test("disables the save button when the selection matches the saved log mode", () => {
+  test("disables the log mode save button when the selection matches the saved value", () => {
     const html = render({
-      kind: "loaded",
-      logMode: "full",
-      selectedLogMode: "full",
-      isSaving: false,
-      saveError: null
+      ...READY_BOTH,
+      logMode: { kind: "ready", value: "full", selected: "full", isSaving: false, saveError: null }
     });
 
     const buttonStart = html.lastIndexOf("<button", html.indexOf(">保存<"));
     expect(html.slice(buttonStart, html.indexOf(">保存<"))).toContain('disabled=""');
   });
 
-  test("enables the save button when the selection differs from the saved log mode", () => {
-    const html = render({
-      kind: "loaded",
-      logMode: "full",
-      selectedLogMode: "disabled",
-      isSaving: false,
-      saveError: null
-    });
+  test("enables the log mode save button when the selection differs from the saved value", () => {
+    const html = render(READY_BOTH);
 
     const buttonStart = html.lastIndexOf("<button", html.indexOf(">保存<"));
     expect(html.slice(buttonStart, html.indexOf(">保存<"))).not.toContain('disabled=""');
   });
 
-  test("shows the save error message when present", () => {
+  test("shows the log mode save error message when present", () => {
     const html = render({
-      kind: "loaded",
-      logMode: "full",
-      selectedLogMode: "disabled",
-      isSaving: false,
-      saveError: "network error"
+      ...READY_BOTH,
+      logMode: { kind: "ready", value: "full", selected: "disabled", isSaving: false, saveError: "network error" }
     });
 
     expect(html).toContain("network error");
+  });
+
+  test("renders a radio option per language with the current selection checked", () => {
+    const html = render(READY_BOTH);
+
+    expect(html).toContain("日本語");
+    expect(html).toContain("English");
+
+    const group = radiogroupHtml(html, locale.settings.languageHeading);
+    expect(group.match(/checked=""/g)?.length).toBe(1);
+    expect(group).toContain('checked="" value="ja"');
+  });
+
+  test("shows the language save error message when present", () => {
+    const html = render({
+      ...READY_BOTH,
+      language: { kind: "ready", value: "ja", selected: "en", isSaving: false, saveError: "language save failed" }
+    });
+
+    expect(html).toContain("language save failed");
+  });
+
+  test("renders English copy when given the English locale", () => {
+    const html = renderToString(
+      <SettingsPageView
+        state={READY_BOTH}
+        locale={getLocale("en")}
+        onLogModeChange={noop}
+        onLogModeSave={noop}
+        onLogModeRetry={noop}
+        onLanguageChange={noop}
+        onLanguageRetry={noop}
+        onRetry={noop}
+      />
+    );
+
+    expect(html).toContain("Log recording mode");
+    expect(html).toContain("Save");
   });
 });

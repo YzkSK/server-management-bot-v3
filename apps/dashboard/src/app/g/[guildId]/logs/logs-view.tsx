@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { LOG_CATEGORIES, type LogCategory } from "@sm-bot/shared";
+import { LOG_CATEGORIES, type LogCategory, type Locale } from "@sm-bot/shared";
 
 import { Button } from "../../../../components/ui/button";
 import { ScrollArea } from "../../../../components/ui/scroll-area";
@@ -15,13 +15,16 @@ const CONNECTION_STATUS_DOT_CLASSES: Record<RealtimeConnectionStatus, string> = 
   error: "bg-destructive"
 };
 
-const CONNECTION_STATUS_LABELS: Record<RealtimeConnectionStatus, string> = {
-  idle: "Idle",
-  connecting: "Connecting…",
-  live: "Live",
-  offline: "Offline",
-  error: "Error"
-};
+function connectionStatusLabel(locale: Locale, status: RealtimeConnectionStatus): string {
+  const labels: Record<RealtimeConnectionStatus, string> = {
+    idle: locale.logs.connectionIdle,
+    connecting: locale.logs.connectionConnecting,
+    live: locale.logs.connectionLive,
+    offline: locale.logs.connectionOffline,
+    error: locale.logs.connectionError
+  };
+  return labels[status];
+}
 
 export interface LogEntryData {
   id: string;
@@ -44,21 +47,9 @@ export type LogsPageState =
       isFetchingNextPage: boolean;
     };
 
-const CATEGORY_LABELS: Record<LogCategory, string> = {
-  all: "All",
-  message: "Message",
-  member: "Member",
-  audit: "Audit",
-  voice: "Voice",
-  temp_vc: "Temp VC",
-  recruitment: "Recruitment",
-  tts: "TTS",
-  system: "System",
-  dashboard: "Dashboard"
-};
-
 export function LogsPageView({
   state,
+  locale,
   category,
   onCategoryChange,
   canViewRaw,
@@ -72,6 +63,7 @@ export function LogsPageView({
   onScrollAwayFromTop
 }: {
   state: LogsPageState;
+  locale: Locale;
   category: LogCategory;
   onCategoryChange: (category: LogCategory) => void;
   canViewRaw: boolean;
@@ -102,7 +94,7 @@ export function LogsPageView({
           <TabsList>
             {LOG_CATEGORIES.map((c) => (
               <TabsTrigger key={c} value={c}>
-                {CATEGORY_LABELS[c]}
+                {locale.logs.category[c]}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -110,7 +102,7 @@ export function LogsPageView({
 
         <div className="flex items-center gap-2">
           {canViewRaw ? (
-            <div role="group" aria-label="View mode" className="flex items-center gap-1.5">
+            <div role="group" aria-label={locale.logs.viewModeGroupLabel} className="flex items-center gap-1.5">
               <Button
                 type="button"
                 variant={viewMode === "human" ? "default" : "outline"}
@@ -118,7 +110,7 @@ export function LogsPageView({
                 aria-pressed={viewMode === "human"}
                 onClick={() => onViewModeChange("human")}
               >
-                Human View
+                {locale.logs.viewModeHuman}
               </Button>
               <Button
                 type="button"
@@ -127,14 +119,16 @@ export function LogsPageView({
                 aria-pressed={viewMode === "raw"}
                 onClick={() => onViewModeChange("raw")}
               >
-                Raw JSON
+                {locale.logs.viewModeRaw}
               </Button>
             </div>
           ) : null}
 
           <span
             data-status={connectionStatus}
-            aria-label={`Realtime status: ${connectionStatus}`}
+            aria-label={locale.logs.realtimeStatusLabel({
+              status: connectionStatusLabel(locale, connectionStatus)
+            })}
             className="flex items-center gap-1.5 text-xs text-muted-foreground"
           >
             <span className="relative flex size-2">
@@ -145,18 +139,18 @@ export function LogsPageView({
                 className={`relative inline-flex size-2 rounded-full ${CONNECTION_STATUS_DOT_CLASSES[connectionStatus]}`}
               />
             </span>
-            {CONNECTION_STATUS_LABELS[connectionStatus]}
+            {connectionStatusLabel(locale, connectionStatus)}
           </span>
         </div>
       </div>
 
-      {state.kind === "loading" ? <p className="text-sm text-muted-foreground">Loading...</p> : null}
+      {state.kind === "loading" ? <p className="text-sm text-muted-foreground">{locale.logs.loading}</p> : null}
       {state.kind === "error" ? (
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-destructive">ログの取得に失敗しました。</p>
+          <p className="text-sm text-destructive">{locale.logs.loadFailed}</p>
           <div>
             <Button type="button" variant="outline" size="sm" onClick={onRetry} disabled={state.isRetrying}>
-              {state.isRetrying ? "再試行中…" : "再試行"}
+              {state.isRetrying ? locale.logs.retrying : locale.logs.retry}
             </Button>
           </div>
         </div>
@@ -166,7 +160,7 @@ export function LogsPageView({
           {pendingCount > 0 ? (
             <div className="flex justify-center">
               <Button type="button" variant="secondary" size="sm" onClick={handleResumeAutoScroll}>
-                {`${pendingCount}件の新着 ↑`}
+                {locale.logs.newLogsCount({ count: pendingCount })}
               </Button>
             </div>
           ) : null}
@@ -197,7 +191,7 @@ export function LogsPageView({
                 onClick={onLoadMore}
                 disabled={state.isFetchingNextPage}
               >
-                {state.isFetchingNextPage ? "Loading…" : "Load more"}
+                {state.isFetchingNextPage ? locale.logs.loadingMore : locale.logs.loadMore}
               </Button>
             </div>
           ) : null}

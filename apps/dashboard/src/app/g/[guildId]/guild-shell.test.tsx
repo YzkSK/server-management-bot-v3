@@ -2,14 +2,18 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "bun:test";
 
-import { GuildShell } from "./guild-shell";
+import { getLocale } from "@sm-bot/shared";
 
-describe("GuildShell", () => {
+import { GuildShellView } from "./guild-shell";
+
+const locale = getLocale("ja");
+
+describe("GuildShellView", () => {
   test("renders the guild name trigger, nav items, and children", () => {
     render(
-      <GuildShell guildId="guild-1" guildName="My Guild">
+      <GuildShellView guildId="guild-1" guildName="My Guild" locale={locale}>
         <p>child content</p>
-      </GuildShell>
+      </GuildShellView>
     );
 
     expect(screen.getByRole("button", { name: /My Guild/ })).toBeDefined();
@@ -22,9 +26,9 @@ describe("GuildShell", () => {
   test("opens the guild menu with links to settings and server switching", async () => {
     const user = userEvent.setup();
     render(
-      <GuildShell guildId="guild-1" guildName="My Guild">
+      <GuildShellView guildId="guild-1" guildName="My Guild" locale={locale}>
         <p>child content</p>
-      </GuildShell>
+      </GuildShellView>
     );
 
     await user.click(screen.getByRole("button", { name: /My Guild/ }));
@@ -35,5 +39,19 @@ describe("GuildShell", () => {
 
     const switchItem = screen.getByRole("menuitem", { name: "サーバーを切り替える" });
     expect(switchItem.getAttribute("href")).toBe("/g");
+  });
+
+  test("renders English labels when given the English locale", async () => {
+    const user = userEvent.setup();
+    render(
+      <GuildShellView guildId="guild-1" guildName="My Guild" locale={getLocale("en")}>
+        <p>child content</p>
+      </GuildShellView>
+    );
+
+    await user.click(screen.getByRole("button", { name: /My Guild/ }));
+
+    expect(screen.getByRole("menuitem", { name: "Server settings" })).toBeDefined();
+    expect(screen.getByRole("menuitem", { name: "Switch server" })).toBeDefined();
   });
 });

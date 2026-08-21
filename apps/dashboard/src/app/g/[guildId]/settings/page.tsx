@@ -3,53 +3,44 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 
-import { CAP } from "@sm-bot/shared";
+import { CAP, type GuildLanguage } from "@sm-bot/shared";
 import type { GuildLogMode } from "@sm-bot/db";
 
+import { useLocale } from "../../../../lib/locale-context";
 import { hasCapabilityFromWireString } from "../../../../lib/use-capability";
 import { trpc } from "../../../../trpc-client";
-import { SettingsPageView, type SettingsPageState } from "./settings-view";
+import {
+  SettingsPageView,
+  type SettingsPageState,
+  type SettingsSectionState
+} from "./settings-view";
 
-export interface LogModeQueryResult {
-  data: { logMode: GuildLogMode } | undefined;
+export interface SectionQueryResult<TValue> {
+  data: TValue | undefined;
   error: { message: string } | null;
   isFetching: boolean;
 }
 
-export function deriveSettingsPageState(input: {
-  // undefined = 権限確認中(まだ判定できない)。boolean確定後に
-  // "no-permission" / 通常フローへ分岐する。
-  canManageLoggingSettings: boolean | undefined;
-  // 権限確認クエリ(dashboardAccess.me)自体がエラーで終わった場合の情報。
-  // isLoadingはエラー終了時もfalseになるため、canManageLoggingSettingsだけでは
-  // 「権限なし」と「確認自体が失敗した」を区別できない。
-  permissionCheckError?: { message: string } | null;
-  permissionCheckIsFetching?: boolean;
-  query: LogModeQueryResult;
-  selectedLogMode: GuildLogMode | null;
+export function deriveSectionState<TValue>(input: {
+  canManage: boolean | undefined;
+  query: SectionQueryResult<TValue>;
+  selected: TValue | null;
   isSaving: boolean;
   saveError: string | null;
-}): SettingsPageState {
-  if (input.canManageLoggingSettings === undefined) {
-    if (input.permissionCheckError) {
-      return {
-        kind: "error",
-        message: input.permissionCheckError.message,
-        isRetrying: input.permissionCheckIsFetching ?? false
-      };
-    }
+}): SettingsSectionState<TValue> {
+  if (input.canManage === false) {
+    return { kind: "hidden" };
+  }
+
+  if (input.canManage === undefined) {
     return { kind: "loading" };
   }
 
-  if (!input.canManageLoggingSettings) {
-    return { kind: "no-permission" };
-  }
-
-  if (input.query.data) {
+  if (input.query.data !== undefined) {
     return {
-      kind: "loaded",
-      logMode: input.query.data.logMode,
-      selectedLogMode: input.selectedLogMode ?? input.query.data.logMode,
+      kind: "ready",
+      value: input.query.data,
+      selected: input.selected ?? input.query.data,
       isSaving: input.isSaving,
       saveError: input.saveError
     };
@@ -62,90 +53,190 @@ export function deriveSettingsPageState(input: {
   return { kind: "loading" };
 }
 
+export function deriveSettingsPageState(input: {
+  canManageLoggingSettings: boolean | undefined;
+  canManageGuildSettings: boolean | undefined;
+  permissionCheckError?: { message: string } | null;
+  permissionCheckIsFetching?: boolean;
+  logModeQuery: SectionQueryResult<GuildLogMode>;
+  selectedLogMode: GuildLogMode | null;
+  isSavingLogMode: boolean;
+  logModeSaveError: string | null;
+  languageQuery: SectionQueryResult<GuildLanguage>;
+  selectedLanguage: GuildLanguage | null;
+  isSavingLanguage: boolean;
+  languageSaveError: string | null;
+}): SettingsPageState {
+  if (input.canManageLoggingSettings === undefined || input.canManageGuildSettings === undefined) {
+    if (input.permissionCheckError) {
+      return {
+        kind: "error",
+        message: input.permissionCheckError.message,
+        isRetrying: input.permissionCheckIsFetching ?? false
+      };
+    }
+    return { kind: "loading" };
+  }
+
+  if (!input.canManageLoggingSettings && !input.canManageGuildSettings) {
+    return { kind: "no-permission" };
+  }
+
+  return {
+    kind: "loaded",
+    logMode: deriveSectionState({
+      canManage: input.canManageLoggingSettings,
+      query: input.logModeQuery,
+      selected: input.selectedLogMode,
+      isSaving: input.isSavingLogMode,
+      saveError: input.logModeSaveError
+    }),
+    language: deriveSectionState({
+      canManage: input.canManageGuildSettings,
+      query: input.languageQuery,
+      selected: input.selectedLanguage,
+      isSaving: input.isSavingLanguage,
+      saveError: input.languageSaveError
+    })
+  };
+}
+
 // 選択された記録モードを変更する際、直前の保存試行に対するsaveErrorは
 // もはや意味を持たない(まだ再試行していないのに古いエラーが残り続けるのを防ぐ)。
-export function nextLogModeSelection(nextLogMode: GuildLogMode): {
-  selectedLogMode: GuildLogMode;
-  saveError: null;
-} {
-  return { selectedLogMode: nextLogMode, saveError: null };
+export function nextSelection<TValue>(next: TValue): { selected: TValue; saveError: null } {
+  return { selected: next, saveError: null };
 }
 
 export default function GuildSettingsPage() {
   const { guildId } = useParams<{ guildId: string }>();
+  const locale = useLocale();
   const meQuery = trpc.dashboardAccess.me.useQuery({ guildId });
-  // isLoadingはクエリがエラーで終わった場合もfalseになるため、エラー時は
-  // canManageLoggingSettingsをundefinedのままにし、no-permissionと誤判定しない。
+
   const canManageLoggingSettings =
     meQuery.isLoading || meQuery.isError
       ? undefined
       : hasCapabilityFromWireString(meQuery.data?.capabilities, CAP.MANAGE_LOGGING_SETTINGS);
+  const canManageGuildSettings =
+    meQuery.isLoading || meQuery.isError
+      ? undefined
+      : hasCapabilityFromWireString(meQuery.data?.capabilities, CAP.MANAGE_GUILD_SETTINGS);
 
   const [selectedLogMode, setSelectedLogMode] = useState<GuildLogMode | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [logModeSaveError, setLogModeSaveError] = useState<string | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState<GuildLanguage | null>(null);
+  const [languageSaveError, setLanguageSaveError] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
-  const query = trpc.logs.getLogMode.useQuery(
+  const logModeQuery = trpc.logs.getLogMode.useQuery(
     { guildId },
     { enabled: canManageLoggingSettings === true }
   );
-  const mutation = trpc.logs.setLogMode.useMutation();
+  const logModeMutation = trpc.logs.setLogMode.useMutation();
+  const languageQuery = trpc.guildSettings.getLanguage.useQuery(
+    { guildId },
+    { enabled: canManageGuildSettings === true }
+  );
+  const languageMutation = trpc.guildSettings.setLanguage.useMutation();
+
+  // logs.getLogMode/guildSettings.getLanguageのレスポンスは{ logMode }/{ language }で
+  // ラップされているため、deriveSectionStateが期待する「素の値」の形に変換する。
+  const logModeQueryResult: SectionQueryResult<GuildLogMode> = {
+    data: logModeQuery.data?.logMode,
+    error: logModeQuery.error ? { message: logModeQuery.error.message } : null,
+    isFetching: logModeQuery.isFetching
+  };
+  const languageQueryResult: SectionQueryResult<GuildLanguage> = {
+    data: languageQuery.data?.language,
+    error: languageQuery.error ? { message: languageQuery.error.message } : null,
+    isFetching: languageQuery.isFetching
+  };
 
   const state = deriveSettingsPageState({
     canManageLoggingSettings,
+    canManageGuildSettings,
     permissionCheckError: meQuery.error ? { message: meQuery.error.message } : null,
     permissionCheckIsFetching: meQuery.isFetching,
-    query,
+    logModeQuery: logModeQueryResult,
     selectedLogMode,
-    isSaving: mutation.isPending,
-    saveError
+    isSavingLogMode: logModeMutation.isPending,
+    logModeSaveError,
+    languageQuery: languageQueryResult,
+    selectedLanguage,
+    isSavingLanguage: languageMutation.isPending,
+    languageSaveError
   });
 
   function handleLogModeChange(nextLogMode: GuildLogMode) {
-    const update = nextLogModeSelection(nextLogMode);
-    setSelectedLogMode(update.selectedLogMode);
-    setSaveError(update.saveError);
+    const update = nextSelection(nextLogMode);
+    setSelectedLogMode(update.selected);
+    setLogModeSaveError(update.saveError);
   }
 
-  function handleRetry() {
-    // エラーの原因が権限確認クエリ(meQuery)自体にある場合、まだ有効化されていない
-    // (enabled: false の)ログ設定クエリまで手動refetchすると無関係なリクエストが
-    // 発生してしまうため、原因のクエリだけを再試行する。
+  function handleLogModeRetry() {
     if (meQuery.isError) {
       void meQuery.refetch();
       return;
     }
-    void query.refetch();
+    void logModeQuery.refetch();
   }
 
-  function handleSave() {
-    if (state.kind !== "loaded") return;
-    const requestedLogMode = state.selectedLogMode;
-    setSaveError(null);
-    mutation.mutate(
+  function handleLogModeSave() {
+    if (state.kind !== "loaded" || state.logMode.kind !== "ready") return;
+    const requestedLogMode = state.logMode.selected;
+    setLogModeSaveError(null);
+    logModeMutation.mutate(
       { logMode: requestedLogMode },
       {
         onSuccess: (result) => {
-          // ミューテーションのレスポンスでクエリキャッシュ自体を直接更新する。
-          // query.dataが即座に権威ある最新値になるため、refetch()が失敗しても
-          // 保存結果はUIに残り続け、かつ後で本当にサーバー側の値が変わった
-          // (別の管理者が変更した等)場合もその後のrefetchで自然に追従できる
-          // (confirmedLogModeのような別状態を持たないため、古い値がUIに
-          // 永続的に居座ることがない)。
           utils.logs.getLogMode.setData({ guildId }, { logMode: result.logMode });
           setSelectedLogMode((current) => (current === requestedLogMode ? null : current));
-          void query.refetch();
+          void logModeQuery.refetch();
         },
-        onError: (error) => setSaveError(error.message)
+        onError: (error) => setLogModeSaveError(error.message)
       }
     );
+  }
+
+  function handleLanguageRetry() {
+    if (meQuery.isError) {
+      void meQuery.refetch();
+      return;
+    }
+    void languageQuery.refetch();
+  }
+
+  function handleLanguageChange(nextLanguage: GuildLanguage) {
+    setLanguageSaveError(null);
+    setSelectedLanguage(nextLanguage);
+    languageMutation.mutate(
+      { language: nextLanguage },
+      {
+        onSuccess: (result) => {
+          utils.guildSettings.getLanguage.setData({ guildId }, { language: result.language });
+          setSelectedLanguage((current) => (current === nextLanguage ? null : current));
+          void languageQuery.refetch();
+        },
+        onError: (error) => {
+          setLanguageSaveError(error.message);
+          setSelectedLanguage((current) => (current === nextLanguage ? null : current));
+        }
+      }
+    );
+  }
+
+  function handleRetry() {
+    void meQuery.refetch();
   }
 
   return (
     <SettingsPageView
       state={state}
+      locale={locale}
       onLogModeChange={handleLogModeChange}
-      onSave={handleSave}
+      onLogModeSave={handleLogModeSave}
+      onLogModeRetry={handleLogModeRetry}
+      onLanguageChange={handleLanguageChange}
+      onLanguageRetry={handleLanguageRetry}
       onRetry={handleRetry}
     />
   );
