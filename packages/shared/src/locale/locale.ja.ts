@@ -54,6 +54,7 @@ export const ja: Locale = {
     connectionError: "エラー",
     realtimeStatusLabel: ({ status }) => `リアルタイム状態: ${status}`,
     loadingMore: "読み込み中…",
-    loadMore: "もっと読み込む"
+    loadMore: "もっと読み込む",
+    attachmentsCount: ({ count }) => `添付ファイル${count}件`
   }
 };

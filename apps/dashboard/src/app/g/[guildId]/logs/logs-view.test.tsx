@@ -570,6 +570,130 @@ describe("LogsPageView", () => {
     expect(resumed).toBe(false);
   });
 
+  test("shows message content in Human View for message.create/message.delete", () => {
+    const entries: LogEntryData[] = [
+      {
+        id: "log-1",
+        eventName: "message.create",
+        actorId: "user-1",
+        channelId: "channel-1",
+        messageId: "msg-1",
+        eventTimestamp: "2026-01-01T00:00:00.000Z",
+        receivedAt: "2026-01-01T00:00:00.000Z",
+        payload: { content: "こんにちは", attachments: [] }
+      },
+      {
+        id: "log-2",
+        eventName: "message.delete",
+        actorId: "user-1",
+        channelId: "channel-1",
+        messageId: "msg-2",
+        eventTimestamp: "2026-01-01T00:00:00.000Z",
+        receivedAt: "2026-01-01T00:00:00.000Z",
+        payload: { content: "削除されたメッセージ", attachments: [] }
+      }
+    ];
+
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loaded", entries, hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+
+    expect(html).toContain("こんにちは");
+    expect(html).toContain("削除されたメッセージ");
+  });
+
+  test("shows old → new content in Human View for message.update", () => {
+    const entries: LogEntryData[] = [
+      {
+        id: "log-1",
+        eventName: "message.update",
+        actorId: "user-1",
+        channelId: "channel-1",
+        messageId: "msg-1",
+        eventTimestamp: "2026-01-01T00:00:00.000Z",
+        receivedAt: "2026-01-01T00:00:00.000Z",
+        payload: { oldContent: "編集前", newContent: "編集後", attachments: [], partial: false }
+      }
+    ];
+
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loaded", entries, hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+
+    expect(html).toContain("編集前");
+    expect(html).toContain("編集後");
+    expect(html).toContain("→");
+  });
+
+  test("shows an attachments count in Human View when attachments are present", () => {
+    const entries: LogEntryData[] = [
+      {
+        id: "log-1",
+        eventName: "message.create",
+        actorId: "user-1",
+        channelId: "channel-1",
+        messageId: "msg-1",
+        eventTimestamp: "2026-01-01T00:00:00.000Z",
+        receivedAt: "2026-01-01T00:00:00.000Z",
+        payload: {
+          content: "",
+          attachments: [
+            { url: "https://example.com/a.png", name: "a.png", contentType: "image/png" },
+            { url: "https://example.com/b.png", name: "b.png", contentType: "image/png" }
+          ]
+        }
+      }
+    ];
+
+    const html = renderToString(
+      <LogsPageView
+        state={{ kind: "loaded", entries, hasNextPage: false, isFetchingNextPage: false }}
+        locale={locale}
+        category="all"
+        onCategoryChange={noop}
+        canViewRaw={false}
+        viewMode="human"
+        onViewModeChange={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+        connectionStatus="idle"
+        pendingCount={0}
+        onResumeAutoScroll={noop}
+        onScrollAwayFromTop={noop}
+      />
+    );
+
+    expect(html).toContain(locale.logs.attachmentsCount({ count: 2 }));
+  });
+
   test("renders the English error message when given the English locale", () => {
     const html = renderToString(
       <LogsPageView

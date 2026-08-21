@@ -44,5 +44,6 @@ export type Locale = {
     realtimeStatusLabel: (vars: { status: string }) => string;
     loadingMore: string;
     loadMore: string;
+    attachmentsCount: (vars: { count: number }) => string;
   };
 };

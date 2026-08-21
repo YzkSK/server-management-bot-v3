@@ -54,6 +54,7 @@ export const en: Locale = {
     connectionError: "Error",
     realtimeStatusLabel: ({ status }) => `Realtime status: ${status}`,
     loadingMore: "Loading…",
-    loadMore: "Load more"
+    loadMore: "Load more",
+    attachmentsCount: ({ count }) => `${count} attachment${count === 1 ? "" : "s"}`
   }
 };

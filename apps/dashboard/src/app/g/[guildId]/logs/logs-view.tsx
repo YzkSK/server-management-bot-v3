@@ -176,7 +176,7 @@ export function LogsPageView({
               <ul className="divide-y">
                 {state.entries.map((entry) => (
                   <li key={entry.id} className="px-4 py-3">
-                    <LogEntryRow entry={entry} viewMode={effectiveViewMode} />
+                    <LogEntryRow entry={entry} viewMode={effectiveViewMode} locale={locale} />
                   </li>
                 ))}
               </ul>
@@ -203,10 +203,12 @@ export function LogsPageView({
 
 function LogEntryRow({
   entry,
-  viewMode
+  viewMode,
+  locale
 }: {
   entry: LogEntryData;
   viewMode: "human" | "raw";
+  locale: Locale;
 }) {
   return (
     <div className="flex flex-col gap-1 text-sm">
@@ -219,7 +221,7 @@ function LogEntryRow({
           {JSON.stringify(entry.payload, null, 2)}
         </pre>
       ) : (
-        <HumanSummary entry={entry} />
+        <HumanSummary entry={entry} locale={locale} />
       )}
     </div>
   );
@@ -239,9 +241,43 @@ function ReceivedAtLabel({ receivedAt }: { receivedAt: string }) {
   );
 }
 
-function HumanSummary({ entry }: { entry: LogEntryData }) {
+function HumanSummary({ entry, locale }: { entry: LogEntryData; locale: Locale }) {
   const parts = [entry.eventName];
   if (entry.actorId) parts.push(`actor:${entry.actorId}`);
   if (entry.channelId) parts.push(`channel:${entry.channelId}`);
-  return <span className="text-foreground">{parts.join(" ")}</span>;
+  const messageDetail = formatMessageDetail(entry, locale);
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-foreground">{parts.join(" ")}</span>
+      {messageDetail ? (
+        <span className="whitespace-pre-wrap break-words text-muted-foreground">{messageDetail}</span>
+      ) : null}
+    </div>
+  );
+}
+
+function formatMessageDetail(entry: LogEntryData, locale: Locale): string | null {
+  const payload = entry.payload;
+  if (!payload) return null;
+
+  const attachmentsNote = formatAttachmentsNote(payload.attachments, locale);
+
+  if (entry.eventName === "message.create" || entry.eventName === "message.delete") {
+    const content = typeof payload.content === "string" && payload.content.length > 0 ? payload.content : null;
+    return [content, attachmentsNote].filter(Boolean).join(" ") || null;
+  }
+
+  if (entry.eventName === "message.update") {
+    const oldContent = typeof payload.oldContent === "string" ? payload.oldContent : null;
+    const newContent = typeof payload.newContent === "string" ? payload.newContent : null;
+    const diff = oldContent || newContent ? `${oldContent ?? ""} → ${newContent ?? ""}` : null;
+    return [diff, attachmentsNote].filter(Boolean).join(" ") || null;
+  }
+
+  return null;
+}
+
+function formatAttachmentsNote(value: unknown, locale: Locale): string | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  return locale.logs.attachmentsCount({ count: value.length });
 }
